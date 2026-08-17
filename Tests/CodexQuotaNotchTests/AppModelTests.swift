@@ -18,6 +18,7 @@ final class AppModelTests: XCTestCase {
             notificationSink: { notificationAlerts.append($0) }
         )
 
+        model.handle(snapshot: snapshot(remaining: 100))
         model.handle(snapshot: snapshot(remaining: 78))
 
         XCTAssertEqual(overlayAlerts.map(\.kind), [.percentage(80)])

@@ -19,6 +19,30 @@ final class AlertEngineTests: XCTestCase {
         XCTAssertEqual(result.alerts.map(\.kind), [.percentage(80)])
     }
 
+    func testDoesNotEmitPercentageForInitialSnapshotBelowThreshold() {
+        let result = engine.evaluate(
+            previous: nil,
+            current: snapshot(remaining: 73, reset: resetDate),
+            now: now,
+            settings: .defaults,
+            state: .empty
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+    }
+
+    func testDoesNotEmitPercentageWhenCurrentValueStaysWithinThresholdBand() {
+        let result = engine.evaluate(
+            previous: snapshot(remaining: 74, reset: resetDate),
+            current: snapshot(remaining: 73, reset: resetDate),
+            now: now,
+            settings: .defaults,
+            state: .empty
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+    }
+
     func testCriticalZoneEmitsEachPercentOnce() {
         var state = AlertState.empty
         let first = engine.evaluate(

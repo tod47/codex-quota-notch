@@ -34,7 +34,6 @@ public struct AlertEngine: Sendable {
         settings: AlertSettings,
         state: AlertState
     ) -> AlertEvaluation {
-        _ = previous
         var nextState = state
         var cycleChanged = false
 
@@ -75,16 +74,25 @@ public struct AlertEngine: Sendable {
         }
 
         if let remaining = current.remainingPercent {
+            let previousRemaining = previous?.remainingPercent
             if settings.criticalAlertsEnabled,
                remaining > 0,
                remaining <= settings.criticalStart,
-               let critical = criticalCandidate(remaining: remaining, settings: settings),
+               let critical = criticalCandidate(
+                   previousRemaining: previousRemaining,
+                   remaining: remaining,
+                   settings: settings
+               ),
                let alert = emit(.percentage(critical), state: &nextState) {
                 return AlertEvaluation(alerts: [alert], updatedState: nextState)
             }
 
             if settings.percentageAlertsEnabled,
-               let ordinary = ordinaryCandidate(remaining: remaining, settings: settings),
+               let ordinary = ordinaryCandidate(
+                   previousRemaining: previousRemaining,
+                   remaining: remaining,
+                   settings: settings
+               ),
                let alert = emit(.percentage(ordinary), state: &nextState) {
                 return AlertEvaluation(alerts: [alert], updatedState: nextState)
             }
@@ -93,19 +101,31 @@ public struct AlertEngine: Sendable {
         return AlertEvaluation(alerts: [], updatedState: nextState)
     }
 
-    private func ordinaryCandidate(remaining: Int, settings: AlertSettings) -> Int? {
+    private func ordinaryCandidate(previousRemaining: Int?, remaining: Int, settings: AlertSettings) -> Int? {
         let step = max(1, settings.ordinaryStep)
         let highestThreshold = 100 - step
         guard remaining <= highestThreshold else { return nil }
         let roundedUp = Int(ceil(Double(remaining) / Double(step))) * step
-        guard roundedUp > settings.criticalStart else { return nil }
+        guard roundedUp > settings.criticalStart,
+              crossedThreshold(previous: previousRemaining, current: remaining, threshold: roundedUp) else {
+            return nil
+        }
         return roundedUp
     }
 
-    private func criticalCandidate(remaining: Int, settings: AlertSettings) -> Int? {
+    private func criticalCandidate(previousRemaining: Int?, remaining: Int, settings: AlertSettings) -> Int? {
         let step = max(1, settings.criticalStep)
         let candidate = (remaining / step) * step
-        return candidate > 0 ? candidate : nil
+        guard candidate > 0,
+              crossedThreshold(previous: previousRemaining, current: remaining, threshold: candidate) else {
+            return nil
+        }
+        return candidate
+    }
+
+    private func crossedThreshold(previous: Int?, current: Int, threshold: Int) -> Bool {
+        guard let previous else { return false }
+        return previous > threshold && current <= threshold
     }
 
     private func countdownCandidate(
