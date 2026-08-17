@@ -6,6 +6,7 @@ final class MenuBarController: NSObject {
     private let openMainWindowAction: () -> Void
     private let refreshAction: () -> Void
     private let quitAction: () -> Void
+    private lazy var contextMenu = makeContextMenu()
 
     init(
         openMainWindow: @escaping () -> Void,
@@ -47,9 +48,11 @@ final class MenuBarController: NSObject {
 
     private func configure() {
         statusItem.button?.target = self
-        statusItem.button?.action = #selector(openMainWindow)
+        statusItem.button?.action = #selector(handleStatusItemClick)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+    }
 
+    private func makeContextMenu() -> NSMenu {
         let menu = NSMenu()
         let openItem = NSMenuItem(title: L10n.text("open.main.window"), action: #selector(openMainWindow), keyEquivalent: "")
         openItem.target = self
@@ -64,7 +67,25 @@ final class MenuBarController: NSObject {
         let quitItem = NSMenuItem(title: L10n.text("quit"), action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
-        statusItem.menu = menu
+        return menu
+    }
+
+    @objc private func handleStatusItemClick() {
+        switch MenuBarClickPolicy.action(for: NSApp.currentEvent?.type) {
+        case .openSettings:
+            openMainWindow()
+        case .showMenu:
+            showContextMenu()
+        }
+    }
+
+    private func showContextMenu() {
+        guard let button = statusItem.button else { return }
+        contextMenu.popUp(
+            positioning: nil,
+            at: NSPoint(x: 0, y: button.bounds.height),
+            in: button
+        )
     }
 
     @objc private func openMainWindow() {

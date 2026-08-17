@@ -2,7 +2,7 @@
 
 Codex Quota Notch 是一个原生 macOS 菜单栏应用，用于在本机显示 Codex 的七天周额度、下次重置时间和当天 token 使用量。鼠标指针移动到当前屏幕顶部中心（有刘海时就是刘海区域）会显示默认的方形圆角浮窗；没有刘海的屏幕和外接显示器也使用顶部中心位置。
 
-The app is built with SwiftUI and AppKit for macOS 13 Ventura and newer. It reads local Codex desktop-app and CLI session logs, shows the remaining weekly quota in the menu bar, and supports a hover popup, a persistent top panel, and a draggable/resizable floating panel.
+The app is built with SwiftUI and AppKit for macOS 13 Ventura and newer. It reads local Codex desktop-app and CLI session logs, shows the remaining weekly quota in the menu bar, and supports a hover popup, a persistent top panel, and a draggable/resizable floating panel. Clicking the app from Finder, reopening it, or left-clicking the menu bar quota opens the settings window; right-clicking the menu bar quota keeps the refresh and quit shortcuts.
 
 ## Features / 功能
 

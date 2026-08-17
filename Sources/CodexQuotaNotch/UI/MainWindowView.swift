@@ -6,7 +6,7 @@ public struct MainWindowView: View {
     public let onRescan: () -> Void
     public let onChooseDataDirectory: () -> Void
 
-    @State private var selectedSection: MainSection = .overview
+    @State private var selectedSection: MainSection = .appearance
 
     public init(
         snapshot: QuotaSnapshot,

@@ -19,6 +19,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainWindowController: MainWindowController!
     private var cancellables = Set<AnyCancellable>()
     private var lastLaunchAtLoginValue: Bool?
+    private var isReady = false
+    private var shouldOpenMainWindowWhenReady = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -65,6 +67,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.overlayPanelController?.handlePointer(point)
         }
         triggerMonitor.start()
+
+        isReady = true
+        if shouldOpenMainWindowWhenReady {
+            shouldOpenMainWindowWhenReady = false
+            openMainWindow()
+        } else {
+            // A menu bar app has no document to open when launched from Finder.
+            // Present its settings window once so double-clicking the .app has
+            // the same result as opening a normal macOS application.
+            DispatchQueue.main.async { [weak self] in
+                self?.openMainWindow()
+            }
+        }
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        requestOpenMainWindow()
+        return false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        requestOpenMainWindow()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -95,6 +120,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openMainWindow() {
         mainWindowController.show(snapshot: model.snapshot)
+    }
+
+    private func requestOpenMainWindow() {
+        guard isReady else {
+            shouldOpenMainWindowWhenReady = true
+            return
+        }
+        openMainWindow()
     }
 
     private func chooseDataDirectory() {
