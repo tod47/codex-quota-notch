@@ -56,9 +56,37 @@ public final class QuotaMonitor: @unchecked Sendable {
         }
     }
 
+    public func refreshNow() {
+        queue.async { [weak self] in
+            self?.refresh()
+        }
+    }
+
     private func refresh() {
-        guard let snapshot = try? dataSource.readSnapshot(now: now(), calendar: calendar) else { return }
-        onSnapshot(snapshot)
+        do {
+            onSnapshot(try dataSource.readSnapshot(now: now(), calendar: calendar))
+        } catch let error as LocalSessionDataError {
+            switch error {
+            case .rootDirectoryUnavailable:
+                onSnapshot(QuotaSnapshot(
+                    weeklyLimit: nil,
+                    secondaryLimit: nil,
+                    dailyTokens: 0,
+                    dailyTotals: [:],
+                    lastUpdatedAt: nil,
+                    sourceStatus: .unreadable(error.localizedDescription)
+                ))
+            }
+        } catch {
+            onSnapshot(QuotaSnapshot(
+                weeklyLimit: nil,
+                secondaryLimit: nil,
+                dailyTokens: 0,
+                dailyTotals: [:],
+                lastUpdatedAt: nil,
+                sourceStatus: .unreadable(error.localizedDescription)
+            ))
+        }
     }
 
     private func installTimer() {

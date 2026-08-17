@@ -2,15 +2,25 @@ import SwiftUI
 
 public struct OverlayView: View {
     public let snapshot: QuotaSnapshot
+    public let alert: QuotaAlert?
     public let onOpenMainWindow: (() -> Void)?
 
-    public init(snapshot: QuotaSnapshot, onOpenMainWindow: (() -> Void)? = nil) {
+    public init(
+        snapshot: QuotaSnapshot,
+        alert: QuotaAlert? = nil,
+        onOpenMainWindow: (() -> Void)? = nil
+    ) {
         self.snapshot = snapshot
+        self.alert = alert
         self.onOpenMainWindow = onOpenMainWindow
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
+            if let alert {
+                AlertBanner(alert: alert, color: alertColor(for: alert))
+            }
+
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.text("app.title"))
@@ -90,6 +100,61 @@ public struct OverlayView: View {
             return L10n.text("source.stale")
         case .unreadable:
             return L10n.text("source.unreadable")
+        }
+    }
+
+    private func alertColor(for alert: QuotaAlert) -> Color {
+        switch alert.kind {
+        case .exhausted:
+            return .red
+        case .percentage(let value) where value <= 10:
+            return .red
+        case .percentage:
+            return .orange
+        case .countdown, .reset:
+            return .blue
+        }
+    }
+}
+
+private struct AlertBanner: View {
+    let alert: QuotaAlert
+    let color: Color
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 9) {
+            Image(systemName: iconName)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.text(alert.titleKey))
+                    .font(.system(size: 10, weight: .semibold))
+                Text(L10n.alertMessage(alert))
+                    .font(.system(size: 10))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .strokeBorder(color.opacity(0.28), lineWidth: 1)
+        }
+    }
+
+    private var iconName: String {
+        switch alert.kind {
+        case .percentage(let value):
+            return value <= 10 ? "exclamationmark.triangle.fill" : "chart.bar"
+        case .countdown:
+            return "clock.badge.exclamationmark"
+        case .reset:
+            return "arrow.clockwise.circle.fill"
+        case .exhausted:
+            return "xmark.octagon.fill"
         }
     }
 }
