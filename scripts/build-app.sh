@@ -39,7 +39,10 @@ fi
 
 resource_bundle="$(find "$resource_root" -maxdepth 1 -type d -name 'CodexQuotaNotch_*.bundle' -print -quit)"
 if [[ -n "$resource_bundle" ]]; then
-    cp -R "$resource_bundle" "$contents_root/Resources/"
+    # SwiftPM's generated Bundle.module accessor first looks beside the app
+    # bundle. Keep a copy there so a packaged app never falls back to the
+    # build directory under Documents and triggers a privacy prompt.
+    cp -R "$resource_bundle" "$bundle_root/"
 fi
 
 cp "$project_root/Resources/Info.plist" "$contents_root/Info.plist"

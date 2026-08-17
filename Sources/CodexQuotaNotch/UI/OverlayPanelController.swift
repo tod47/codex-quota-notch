@@ -9,6 +9,12 @@ enum OverlayPanelSizing {
     }
 }
 
+enum OverlayPanelUpdatePolicy {
+    static func shouldShowFloating(previousMode: DisplayMode?, panelIsVisible: Bool) -> Bool {
+        previousMode != .floating || !panelIsVisible
+    }
+}
+
 @MainActor
 final class OverlayPanelController: NSObject, NSWindowDelegate {
     private let settingsStore: SettingsStore
@@ -23,6 +29,8 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     private var visibilityAnimationToken = UUID()
     private var isHiding = false
     private var isApplyingFloatingFrame = false
+    private var pendingFloatingFrame: CodableRect?
+    private var floatingFramePersistenceWorkItem: DispatchWorkItem?
     private var activeMode: DisplayMode?
 
     var onOpenMainWindow: (() -> Void)?
@@ -55,7 +63,12 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
             showPersistent()
         case .floating:
             activeMode = .floating
-            showFloating()
+            if OverlayPanelUpdatePolicy.shouldShowFloating(
+                previousMode: previousMode,
+                panelIsVisible: panel?.isVisible == true
+            ) {
+                showFloating()
+            }
         }
     }
 
@@ -185,11 +198,11 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
-        persistFloatingFrameIfNeeded()
+        scheduleFloatingFramePersistence()
     }
 
     func windowDidResize(_ notification: Notification) {
-        persistFloatingFrameIfNeeded()
+        scheduleFloatingFramePersistence()
     }
 
     private func makePanelIfNeeded() -> NSPanel {
@@ -420,11 +433,46 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
         return NSRect(x: stored.x, y: stored.y, width: size.width, height: size.height)
     }
 
-    private func persistFloatingFrameIfNeeded() {
+    private func scheduleFloatingFramePersistence() {
         guard !isApplyingFloatingFrame,
               settingsStore.settings.displayMode == .floating,
               let frame = panel?.frame else { return }
+
         let next = CodableRect(x: frame.origin.x, y: frame.origin.y, width: frame.width, height: frame.height)
+        guard settingsStore.settings.floatingFrame != next else { return }
+
+        pendingFloatingFrame = next
+        floatingFramePersistenceWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.floatingFramePersistenceWorkItem = nil
+                let pendingFrame = self.pendingFloatingFrame
+                self.pendingFloatingFrame = nil
+                self.persistFloatingFrameIfNeeded(frame: pendingFrame)
+            }
+        }
+        floatingFramePersistenceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
+    }
+
+    private func persistFloatingFrameIfNeeded(frame: CodableRect? = nil) {
+        guard !isApplyingFloatingFrame else { return }
+
+        let next: CodableRect
+        if let frame {
+            next = frame
+        } else if let currentFrame = panel?.frame {
+            next = CodableRect(
+                x: currentFrame.origin.x,
+                y: currentFrame.origin.y,
+                width: currentFrame.width,
+                height: currentFrame.height
+            )
+        } else {
+            return
+        }
+
         guard settingsStore.settings.floatingFrame != next else { return }
         settingsStore.settings.floatingFrame = next
         settingsStore.save()
