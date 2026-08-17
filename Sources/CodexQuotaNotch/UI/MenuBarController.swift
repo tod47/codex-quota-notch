@@ -6,7 +6,7 @@ final class MenuBarController: NSObject {
     private let openMainWindowAction: () -> Void
     private let refreshAction: () -> Void
     private let quitAction: () -> Void
-    private lazy var contextMenu = makeContextMenu()
+    private var contextMenu: NSMenu?
 
     init(
         openMainWindow: @escaping () -> Void,
@@ -50,6 +50,12 @@ final class MenuBarController: NSObject {
         statusItem.button?.target = self
         statusItem.button?.action = #selector(handleStatusItemClick)
         statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        updateLanguage()
+    }
+
+    func updateLanguage() {
+        statusItem.button?.toolTip = L10n.text("app.weekly.quota")
+        contextMenu = makeContextMenu()
     }
 
     private func makeContextMenu() -> NSMenu {
@@ -80,7 +86,7 @@ final class MenuBarController: NSObject {
     }
 
     private func showContextMenu() {
-        guard let button = statusItem.button else { return }
+        guard let button = statusItem.button, let contextMenu else { return }
         contextMenu.popUp(
             positioning: nil,
             at: NSPoint(x: 0, y: button.bounds.height),

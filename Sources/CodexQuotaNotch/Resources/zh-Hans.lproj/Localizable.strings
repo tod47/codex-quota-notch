@@ -41,6 +41,10 @@
 "rescan" = "重新扫描";
 "simulation" = "模拟数据";
 "simulation.description" = "用于测试额度变化和提醒，不读取真实额度。";
+"language" = "语言";
+"language.system" = "跟随系统";
+"language.english" = "English";
+"language.chinese" = "中文";
 "appearance" = "外观";
 "system" = "跟随系统";
 "light" = "浅色";
@@ -64,4 +68,9 @@
 "ordinary.step" = "普通提醒步进";
 "critical.start" = "低额度起点";
 "critical.step" = "低额度步进";
+"thresholds" = "阈值";
+"channels" = "提醒通道";
+"width" = "宽度";
+"height" = "高度";
+"status" = "状态";
 "privacy.local.only" = "数据只在本机读取，不上传 Codex 会话内容。";

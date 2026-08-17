@@ -25,6 +25,7 @@ final class SettingsStoreTests: XCTestCase {
         let store = SettingsStore(defaults: defaults)
         store.settings.appearance = .dark
         store.settings.displayMode = .floating
+        store.settings.language = .chineseSimplified
         store.settings.floatingFrame = CodableRect(x: 40, y: 70, width: 310, height: 220)
         store.settings.ordinaryStep = 5
         store.save()
@@ -32,10 +33,31 @@ final class SettingsStoreTests: XCTestCase {
         let reloaded = SettingsStore(defaults: defaults)
         XCTAssertEqual(reloaded.settings.appearance, .dark)
         XCTAssertEqual(reloaded.settings.displayMode, .floating)
+        XCTAssertEqual(reloaded.settings.language, .chineseSimplified)
         XCTAssertEqual(reloaded.settings.floatingFrame.width, 310)
         XCTAssertEqual(reloaded.settings.ordinaryStep, 5)
 
         defaults.removePersistentDomain(forName: "CodexQuotaNotchTests.settings")
+    }
+
+    func testLegacySettingsWithoutLanguageDefaultToSystem() throws {
+        let defaults = UserDefaults(suiteName: "CodexQuotaNotchTests.legacy-settings")!
+        defaults.removePersistentDomain(forName: "CodexQuotaNotchTests.legacy-settings")
+
+        var legacyObject = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(AppSettings.defaults)) as? [String: Any]
+        )
+        legacyObject.removeValue(forKey: "language")
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: legacyObject),
+            forKey: "codex-quota-notch.settings.v1"
+        )
+
+        let reloaded = SettingsStore(defaults: defaults)
+
+        XCTAssertEqual(reloaded.settings.language, .system)
+        XCTAssertEqual(reloaded.settings.displayMode, .topPopup)
+        defaults.removePersistentDomain(forName: "CodexQuotaNotchTests.legacy-settings")
     }
 
     func testResetFloatingFrameRestoresDefault() {

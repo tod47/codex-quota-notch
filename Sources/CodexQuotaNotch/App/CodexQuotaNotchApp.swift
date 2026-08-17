@@ -24,6 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        L10n.setLanguage(settingsStore.settings.language)
 
         notificationClient = NotificationClient()
         notificationClient.requestAuthorization()
@@ -111,6 +112,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsStore.$settings
             .sink { [weak self] settings in
                 guard let self else { return }
+                L10n.setLanguage(settings.language)
+                self.menuBarController?.updateLanguage()
+                self.mainWindowController?.updateLanguage()
                 self.overlayPanelController?.updateSettings(settings)
                 self.model?.applySettings(settings)
                 self.syncLaunchAtLogin(settings.launchAtLogin)

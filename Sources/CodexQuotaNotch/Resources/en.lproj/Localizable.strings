@@ -41,6 +41,10 @@
 "rescan" = "Rescan";
 "simulation" = "Simulation data";
 "simulation.description" = "Use synthetic quota changes to test alerts without reading live data.";
+"language" = "Language";
+"language.system" = "Follow System";
+"language.english" = "English";
+"language.chinese" = "中文";
 "appearance" = "Appearance";
 "system" = "Follow System";
 "light" = "Light";
@@ -64,4 +68,9 @@
 "ordinary.step" = "Ordinary alert step";
 "critical.start" = "Critical range starts at";
 "critical.step" = "Critical alert step";
+"thresholds" = "Thresholds";
+"channels" = "Channels";
+"width" = "Width";
+"height" = "Height";
+"status" = "Status";
 "privacy.local.only" = "Data is read locally and Codex session content is never uploaded.";

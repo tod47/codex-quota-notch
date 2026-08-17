@@ -28,6 +28,7 @@ public struct MainWindowView: View {
                         .tag(section)
                 }
             }
+            .id(settingsStore.settings.language)
             .navigationTitle(L10n.text("app.title"))
             .frame(minWidth: 190)
         } detail: {
@@ -44,6 +45,7 @@ public struct MainWindowView: View {
                 }
             }
             .frame(minWidth: 610, maxWidth: .infinity, maxHeight: .infinity)
+            .id(settingsStore.settings.language)
         }
         .frame(minWidth: 820, minHeight: 560)
         .preferredColorScheme(settingsStore.settings.appearance.colorScheme)
@@ -192,7 +194,7 @@ private struct AlertsPage: View {
                 Toggle(L10n.text("exhausted.alerts"), isOn: binding(\.exhaustedAlertsEnabled))
             }
 
-            Section("阈值 / Thresholds") {
+            Section(L10n.text("thresholds")) {
                 Stepper(value: binding(\.ordinaryStep), in: 1...50) {
                     LabeledContent(L10n.text("ordinary.step"), value: "\(settingsStore.settings.ordinaryStep)%")
                 }
@@ -204,13 +206,14 @@ private struct AlertsPage: View {
                 }
             }
 
-            Section("提醒通道 / Channels") {
+            Section(L10n.text("channels")) {
                 Toggle(L10n.text("overlay.alerts"), isOn: binding(\.overlayAlertsEnabled))
                 Toggle(L10n.text("system.notifications"), isOn: binding(\.systemNotificationsEnabled))
             }
         }
         .formStyle(.grouped)
         .padding(20)
+        .id(settingsStore.settings.language)
         .navigationTitle(L10n.text("alerts"))
     }
 
@@ -231,6 +234,11 @@ private struct AppearancePage: View {
     var body: some View {
         Form {
             Section(L10n.text("appearance")) {
+                Picker(L10n.text("language"), selection: binding(\.language)) {
+                    ForEach(AppLanguage.allCases, id: \.self) { language in
+                        Text(L10n.text(language.localizationKey)).tag(language)
+                    }
+                }
                 Picker(L10n.text("appearance"), selection: binding(\.appearance)) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
                         Text(L10n.text(mode.localizationKey)).tag(mode)
@@ -245,8 +253,8 @@ private struct AppearancePage: View {
             }
 
             Section(L10n.text("floating")) {
-                LabeledContent("Width", value: "\(Int(settingsStore.settings.floatingFrame.width)) pt")
-                LabeledContent("Height", value: "\(Int(settingsStore.settings.floatingFrame.height)) pt")
+                LabeledContent(L10n.text("width"), value: "\(Int(settingsStore.settings.floatingFrame.width)) pt")
+                LabeledContent(L10n.text("height"), value: "\(Int(settingsStore.settings.floatingFrame.height)) pt")
                 Button(L10n.text("reset.floating.frame")) {
                     settingsStore.resetFloatingFrame()
                 }
@@ -254,6 +262,7 @@ private struct AppearancePage: View {
         }
         .formStyle(.grouped)
         .padding(20)
+        .id(settingsStore.settings.language)
         .navigationTitle(L10n.text("appearance.display"))
     }
 
@@ -283,7 +292,7 @@ private struct DataPrivacyPage: View {
                         .multilineTextAlignment(.trailing)
                 }
                 LabeledContent(L10n.text("last.updated"), value: L10n.date(snapshot.lastUpdatedAt))
-                LabeledContent("Status", value: sourceStatus)
+                LabeledContent(L10n.text("status"), value: sourceStatus)
                 HStack {
                     Button(L10n.text("choose.folder"), action: onChooseDataDirectory)
                     Button(L10n.text("rescan"), action: onRescan)
@@ -304,6 +313,7 @@ private struct DataPrivacyPage: View {
         }
         .formStyle(.grouped)
         .padding(20)
+        .id(settingsStore.settings.language)
         .navigationTitle(L10n.text("data.privacy"))
     }
 
@@ -342,6 +352,16 @@ private extension AppearanceMode {
         case .system: return "system"
         case .light: return "light"
         case .dark: return "dark"
+        }
+    }
+}
+
+private extension AppLanguage {
+    var localizationKey: String {
+        switch self {
+        case .system: return "language.system"
+        case .english: return "language.english"
+        case .chineseSimplified: return "language.chinese"
         }
     }
 }

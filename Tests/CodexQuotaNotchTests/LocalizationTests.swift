@@ -13,4 +13,14 @@ final class LocalizationTests: XCTestCase {
         XCTAssertTrue(contents.contains("Codex 周额度已重置"))
         XCTAssertTrue(contents.contains("Codex 周额度已用尽"))
     }
+
+    @MainActor
+    func testExplicitLanguageLoadsRequestedStrings() {
+        XCTAssertEqual(L10n.text("overview", language: .english), "Overview")
+        XCTAssertEqual(L10n.text("overview", language: .chineseSimplified), "总览")
+        XCTAssertEqual(L10n.text("alerts", language: .english), "Alerts")
+        XCTAssertEqual(L10n.text("alerts", language: .chineseSimplified), "提醒")
+        XCTAssertEqual(L10n.text("top.popup", language: .english), "Top popup")
+        XCTAssertEqual(L10n.text("top.popup", language: .chineseSimplified), "顶部弹窗")
+    }
 }

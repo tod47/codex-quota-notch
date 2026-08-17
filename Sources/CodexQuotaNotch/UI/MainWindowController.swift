@@ -31,6 +31,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
         hostingView?.rootView = makeRootView(snapshot: snapshot)
     }
 
+    func updateLanguage() {
+        window?.title = L10n.text("app.title")
+    }
+
     private func makeWindowIfNeeded(snapshot: QuotaSnapshot) -> NSWindow {
         if let window { return window }
 
