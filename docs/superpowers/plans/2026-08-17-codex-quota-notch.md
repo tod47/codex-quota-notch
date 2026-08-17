@@ -268,7 +268,7 @@ Cover:
 ```swift
 func testUsesPositiveCumulativeDeltasOnly() {
     let values = [1_000, 1_400, 1_400, 1_250, 1_900]
-    XCTAssertEqual(DailyUsageAggregator.deltaTotal(values), 1_000)
+    XCTAssertEqual(DailyUsageAggregator.deltaTotal(values), 1_900)
 }
 
 func testSplitsTotalsByLocalDate() {
