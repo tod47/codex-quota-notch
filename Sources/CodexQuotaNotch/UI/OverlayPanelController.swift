@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import SwiftUI
 
 @MainActor
@@ -8,8 +9,12 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     private var panel: NSPanel?
     private var hostingView: NSHostingView<AnyView>?
     private var currentAlert: QuotaAlert?
-    private var hideWorkItem: DispatchWorkItem?
+    private var topTriggerDwellWorkItem: DispatchWorkItem?
+    private var topTriggerDwellState = TopTriggerDwellState()
+    private var topTriggerDwellToken = UUID()
     private var alertDismissWorkItem: DispatchWorkItem?
+    private var visibilityAnimationToken = UUID()
+    private var isHiding = false
     private var activeMode: DisplayMode?
 
     var onOpenMainWindow: (() -> Void)?
@@ -28,14 +33,14 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
 
     func updateSettings(_ settings: AppSettings) {
         let previousMode = activeMode
+        cancelTopTriggerDwell()
         refreshContent()
 
         switch settings.displayMode {
         case .topPopup:
             activeMode = .topPopup
             if panel?.isVisible == true, previousMode != .topPopup {
-                panel?.orderOut(nil)
-                onVisibilityChanged?(false)
+                hidePopup(animated: false)
             }
         case .topPersistent:
             activeMode = .topPersistent
@@ -66,7 +71,7 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
                 self.currentAlert = nil
                 self.refreshContent()
                 if self.settingsStore.settings.displayMode == .topPopup {
-                    self.scheduleHide()
+                    self.handlePointer(NSEvent.mouseLocation)
                 }
             }
         }
@@ -75,34 +80,69 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     }
 
     func handlePointer(_ point: NSPoint) {
-        guard settingsStore.settings.displayMode == .topPopup else { return }
-        guard let screen = TopTriggerMonitor.screen(containing: point) else { return }
+        guard settingsStore.settings.displayMode == .topPopup else {
+            cancelTopTriggerDwell()
+            return
+        }
+        guard let screen = TopTriggerMonitor.screen(containing: point) else {
+            cancelTopTriggerDwell()
+            if panel?.isVisible == true {
+                hidePopup()
+            }
+            return
+        }
 
         let inTrigger = TopTriggerMonitor.triggerRect(for: screen).contains(point)
         let inPanel = panel?.isVisible == true && panel?.frame.contains(point) == true
-        if inTrigger || inPanel {
-            hideWorkItem?.cancel()
-            if inTrigger {
-                showTopPopup(on: screen)
+        if inTrigger {
+            if panel?.isVisible == true {
+                cancelTopTriggerDwell()
+                keepTopPopupVisible(on: screen)
+            } else {
+                beginTopTriggerDwell()
             }
-        } else if panel?.isVisible == true {
-            scheduleHide()
+        } else if inPanel {
+            cancelTopTriggerDwell()
+            keepTopPopupVisible(on: screen)
+        } else {
+            cancelTopTriggerDwell()
+            if panel?.isVisible == true {
+                hidePopup()
+            }
         }
     }
 
     func showTopPopup(on screen: NSScreen) {
+        cancelTopTriggerDwell()
         let panel = makePanelIfNeeded()
+        let wasVisible = panel.isVisible && panel.alphaValue > 0.01
+        let shouldAnimate = !wasVisible || activeMode != .topPopup
+        invalidateVisibilityAnimation()
+        isHiding = false
         configurePanel(for: .topPopup)
         let frame = topFrame(on: screen)
-        panel.setFrame(frame, display: true)
-        panel.orderFrontRegardless()
-        onVisibilityChanged?(true)
         activeMode = .topPopup
+
+        if shouldAnimate {
+            panel.alphaValue = 0
+            panel.setFrame(collapsedTopFrame(for: frame), display: false)
+            panel.orderFrontRegardless()
+            onVisibilityChanged?(true)
+            animateTopPopupIn(panel: panel, to: frame)
+        } else {
+            panel.alphaValue = 1
+            panel.setFrame(frame, display: true)
+            panel.orderFrontRegardless()
+        }
     }
 
     func showPersistent() {
+        cancelTopTriggerDwell()
+        invalidateVisibilityAnimation()
+        isHiding = false
         let panel = makePanelIfNeeded()
         configurePanel(for: .topPersistent)
+        panel.alphaValue = 1
         panel.setFrame(topFrame(on: screenForCurrentPointer()), display: true)
         panel.orderFrontRegardless()
         onVisibilityChanged?(true)
@@ -110,8 +150,12 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     }
 
     func showFloating() {
+        cancelTopTriggerDwell()
+        invalidateVisibilityAnimation()
+        isHiding = false
         let panel = makePanelIfNeeded()
         configurePanel(for: .floating)
+        panel.alphaValue = 1
         let frame = resolvedFloatingFrame()
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
@@ -120,9 +164,7 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     }
 
     func hidePopup() {
-        hideWorkItem?.cancel()
-        panel?.orderOut(nil)
-        onVisibilityChanged?(false)
+        hidePopup(animated: true)
     }
 
     func resetFloatingFrame() {
@@ -151,7 +193,7 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.hidesOnDeactivate = false
         panel.isMovableByWindowBackground = true
         panel.delegate = self
@@ -159,8 +201,14 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
         panel.level = .statusBar
 
         let container = NSView(frame: NSRect(x: 0, y: 0, width: 286, height: 304))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.clear.cgColor
+        container.layer?.isOpaque = false
         let hostingView = NSHostingView(rootView: makeRootView())
         hostingView.translatesAutoresizingMaskIntoConstraints = false
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        hostingView.layer?.isOpaque = false
         container.addSubview(hostingView)
         NSLayoutConstraint.activate([
             hostingView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
@@ -233,23 +281,113 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
             ?? NSScreen.screens.first!
     }
 
-    private func scheduleHide() {
-        hideWorkItem?.cancel()
+    private func beginTopTriggerDwell() {
+        guard topTriggerDwellState.isActive == false, topTriggerDwellWorkItem == nil else { return }
+
+        topTriggerDwellState.enter(at: Date())
+        let token = UUID()
+        topTriggerDwellToken = token
         let workItem = DispatchWorkItem { [weak self] in
             Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard self.settingsStore.settings.displayMode == .topPopup else { return }
+                guard let self, self.topTriggerDwellToken == token else { return }
+                self.topTriggerDwellWorkItem = nil
+
                 let point = NSEvent.mouseLocation
-                if let screen = TopTriggerMonitor.screen(containing: point),
-                   TopTriggerMonitor.triggerRect(for: screen).contains(point) || self.panel?.frame.contains(point) == true {
+                guard let screen = TopTriggerMonitor.screen(containing: point),
+                      TopTriggerMonitor.triggerRect(for: screen).contains(point),
+                      self.topTriggerDwellState.activateIfReady(at: Date()) else {
+                    self.cancelTopTriggerDwell()
                     return
                 }
-                self.panel?.orderOut(nil)
+
+                self.showTopPopup(on: screen)
+            }
+        }
+        topTriggerDwellWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + TopTriggerDwellState.defaultDwellTime,
+            execute: workItem
+        )
+    }
+
+    private func cancelTopTriggerDwell() {
+        topTriggerDwellWorkItem?.cancel()
+        topTriggerDwellWorkItem = nil
+        topTriggerDwellToken = UUID()
+        topTriggerDwellState.leave()
+    }
+
+    private func keepTopPopupVisible(on screen: NSScreen) {
+        guard let panel else { return }
+        invalidateVisibilityAnimation()
+        isHiding = false
+        panel.alphaValue = 1
+        panel.setFrame(topFrame(on: screen), display: true)
+        panel.orderFrontRegardless()
+    }
+
+    private func animateTopPopupIn(panel: NSPanel, to frame: NSRect) {
+        let animationToken = visibilityAnimationToken
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.24
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().setFrame(frame, display: true)
+            panel.animator().alphaValue = 1
+        } completionHandler: { [weak self, weak panel] in
+            Task { @MainActor [weak self, weak panel] in
+                guard let self, self.visibilityAnimationToken == animationToken else { return }
+                panel?.alphaValue = 1
+            }
+        }
+    }
+
+    private func hidePopup(animated: Bool) {
+        cancelTopTriggerDwell()
+        guard let panel, panel.isVisible else { return }
+
+        if animated, isHiding { return }
+
+        invalidateVisibilityAnimation()
+        let animationToken = visibilityAnimationToken
+        let collapsedFrame = collapsedTopFrame(for: panel.frame)
+
+        guard animated else {
+            isHiding = false
+            panel.orderOut(nil)
+            panel.alphaValue = 1
+            onVisibilityChanged?(false)
+            return
+        }
+
+        isHiding = true
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.16
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().setFrame(collapsedFrame, display: true)
+            panel.animator().alphaValue = 0
+        } completionHandler: { [weak self, weak panel] in
+            Task { @MainActor [weak self, weak panel] in
+                guard let self, self.visibilityAnimationToken == animationToken, let panel else { return }
+                self.isHiding = false
+                panel.orderOut(nil)
+                panel.alphaValue = 1
                 self.onVisibilityChanged?(false)
             }
         }
-        hideWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35, execute: workItem)
+    }
+
+    private func invalidateVisibilityAnimation() {
+        visibilityAnimationToken = UUID()
+    }
+
+    private func collapsedTopFrame(for frame: NSRect) -> NSRect {
+        let collapsedHeight: CGFloat = 10
+        return NSRect(
+            x: frame.minX,
+            y: frame.maxY - collapsedHeight,
+            width: frame.width,
+            height: collapsedHeight
+        )
     }
 
     private func resolvedFloatingFrame() -> NSRect {

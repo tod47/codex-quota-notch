@@ -76,7 +76,8 @@ public struct OverlayView: View {
             RoundedRectangle(cornerRadius: 22, style: .continuous)
                 .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
         }
-        .shadow(color: .black.opacity(0.25), radius: 28, y: 12)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(L10n.text("app.weekly.quota")), \(L10n.percentage(snapshot.remainingPercent))")
     }
