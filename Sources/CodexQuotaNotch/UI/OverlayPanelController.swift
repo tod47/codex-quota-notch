@@ -2,6 +2,13 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
+enum OverlayPanelSizing {
+    static func fixedContentSize(for mode: DisplayMode, hasAlert: Bool) -> NSSize? {
+        guard mode != .floating else { return nil }
+        return NSSize(width: 286, height: hasAlert ? 360 : 304)
+    }
+}
+
 @MainActor
 final class OverlayPanelController: NSObject, NSWindowDelegate {
     private let settingsStore: SettingsStore
@@ -15,6 +22,7 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     private var alertDismissWorkItem: DispatchWorkItem?
     private var visibilityAnimationToken = UUID()
     private var isHiding = false
+    private var isApplyingFloatingFrame = false
     private var activeMode: DisplayMode?
 
     var onOpenMainWindow: (() -> Void)?
@@ -157,6 +165,8 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
         configurePanel(for: .floating)
         panel.alphaValue = 1
         let frame = resolvedFloatingFrame()
+        isApplyingFloatingFrame = true
+        defer { isApplyingFloatingFrame = false }
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
         onVisibilityChanged?(true)
@@ -236,7 +246,12 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
             panel.isMovableByWindowBackground = true
             panel.minSize = NSSize(width: 250, height: 190)
         }
-        panel.setContentSize(NSSize(width: 286, height: currentAlert == nil ? 304 : 360))
+        if let contentSize = OverlayPanelSizing.fixedContentSize(
+            for: mode,
+            hasAlert: currentAlert != nil
+        ) {
+            panel.setContentSize(contentSize)
+        }
     }
 
     private func refreshContent() {
@@ -406,7 +421,9 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     }
 
     private func persistFloatingFrameIfNeeded() {
-        guard settingsStore.settings.displayMode == .floating, let frame = panel?.frame else { return }
+        guard !isApplyingFloatingFrame,
+              settingsStore.settings.displayMode == .floating,
+              let frame = panel?.frame else { return }
         let next = CodableRect(x: frame.origin.x, y: frame.origin.y, width: frame.width, height: frame.height)
         guard settingsStore.settings.floatingFrame != next else { return }
         settingsStore.settings.floatingFrame = next

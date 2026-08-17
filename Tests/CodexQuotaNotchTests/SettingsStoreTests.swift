@@ -4,6 +4,18 @@ import XCTest
 
 @MainActor
 final class SettingsStoreTests: XCTestCase {
+    func testFloatingModeDoesNotForcePopupContentSize() {
+        XCTAssertNil(OverlayPanelSizing.fixedContentSize(for: .floating, hasAlert: false))
+        XCTAssertEqual(
+            OverlayPanelSizing.fixedContentSize(for: .topPopup, hasAlert: false),
+            NSSize(width: 286, height: 304)
+        )
+        XCTAssertEqual(
+            OverlayPanelSizing.fixedContentSize(for: .topPersistent, hasAlert: true),
+            NSSize(width: 286, height: 360)
+        )
+    }
+
     func testDefaultsMatchApprovedProductBehavior() {
         let settings = AppSettings.defaults
 
