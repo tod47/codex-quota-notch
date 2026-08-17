@@ -49,6 +49,8 @@ open build/CodexQuotaNotch.app
 
 首次运行时，macOS 可能询问通知权限。拒绝通知权限不影响菜单栏、顶部浮窗和主窗口功能。若全局鼠标监听受到系统权限限制，仍可通过菜单栏打开主窗口和刷新数据。
 
+当前仓库提供的是未签名、未公证的直接分发构建。若 Gatekeeper 第一次阻止打开，请在 Finder 中对应用点按右键并选择“打开”，或到“系统设置 → 隐私与安全性”中确认“仍要打开”。
+
 ## Data source / 数据来源
 
 默认目录是 `~/.codex/sessions`。如果 Codex 使用了其他本地目录，可以在主窗口的“数据与隐私”中选择目录。应用按 JSONL 行读取 `event_msg` 的 `token_count` 和 `rate_limits` 字段，损坏的行会跳过。
