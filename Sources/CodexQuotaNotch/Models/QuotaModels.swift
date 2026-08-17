@@ -69,6 +69,7 @@ public struct QuotaSnapshot: Equatable, Sendable {
     public let weeklyLimit: RateLimitSnapshot?
     public let secondaryLimit: RateLimitSnapshot?
     public let dailyTokens: Int
+    public let dailyTotals: [Date: Int]
     public let lastUpdatedAt: Date?
     public let sourceStatus: DataSourceStatus
 
@@ -76,12 +77,14 @@ public struct QuotaSnapshot: Equatable, Sendable {
         weeklyLimit: RateLimitSnapshot?,
         secondaryLimit: RateLimitSnapshot?,
         dailyTokens: Int,
+        dailyTotals: [Date: Int] = [:],
         lastUpdatedAt: Date?,
         sourceStatus: DataSourceStatus
     ) {
         self.weeklyLimit = weeklyLimit
         self.secondaryLimit = secondaryLimit
         self.dailyTokens = dailyTokens
+        self.dailyTotals = dailyTotals
         self.lastUpdatedAt = lastUpdatedAt
         self.sourceStatus = sourceStatus
     }

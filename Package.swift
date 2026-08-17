@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "CodexQuotaNotch",
+    defaultLocalization: "en",
     platforms: [.macOS(.v13)],
     products: [
         .executable(name: "CodexQuotaNotch", targets: ["CodexQuotaNotch"])

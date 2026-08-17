@@ -45,6 +45,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var dataDirectoryBookmark: Data?
     public var dataDirectoryPath: String
     public var floatingFrame: CodableRect
+    public var simulationMode: Bool
 
     public static var defaults: AppSettings {
         AppSettings(
@@ -65,7 +66,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
             dataDirectoryBookmark: nil,
             dataDirectoryPath: FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".codex/sessions", isDirectory: true).path,
-            floatingFrame: CodableRect(x: 0, y: 0, width: 320, height: 230)
+            floatingFrame: CodableRect(x: 0, y: 0, width: 320, height: 230),
+            simulationMode: false
         )
     }
 
@@ -86,7 +88,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         countdownHours: [Int],
         dataDirectoryBookmark: Data?,
         dataDirectoryPath: String,
-        floatingFrame: CodableRect
+        floatingFrame: CodableRect,
+        simulationMode: Bool
     ) {
         self.appearance = appearance
         self.displayMode = displayMode
@@ -105,6 +108,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.dataDirectoryBookmark = dataDirectoryBookmark
         self.dataDirectoryPath = dataDirectoryPath
         self.floatingFrame = floatingFrame
+        self.simulationMode = simulationMode
     }
 
     public var alertSettings: AlertSettings {

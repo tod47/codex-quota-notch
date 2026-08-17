@@ -23,6 +23,7 @@ public struct LocalSessionLogDataSource: Sendable {
                 weeklyLimit: nil,
                 secondaryLimit: nil,
                 dailyTokens: 0,
+                dailyTotals: [:],
                 lastUpdatedAt: nil,
                 sourceStatus: .waitingForSession
             )
@@ -46,6 +47,7 @@ public struct LocalSessionLogDataSource: Sendable {
                 weeklyLimit: nil,
                 secondaryLimit: nil,
                 dailyTokens: 0,
+                dailyTotals: [:],
                 lastUpdatedAt: nil,
                 sourceStatus: .waitingForSession
             )
@@ -73,6 +75,7 @@ public struct LocalSessionLogDataSource: Sendable {
             weeklyLimit: weekly,
             secondaryLimit: secondary,
             dailyTokens: dailyTokens,
+            dailyTotals: dailyTotals,
             lastUpdatedAt: latestUpdatedAt,
             sourceStatus: sourceStatus
         )
