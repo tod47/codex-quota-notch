@@ -98,6 +98,37 @@ final class AlertEngineTests: XCTestCase {
         XCTAssertFalse(result.updatedState.emittedKeys.contains("percentage:80"))
     }
 
+    func testResetTimestampJitterDoesNotEmitReset() {
+        let state = AlertState(cycleID: QuotaMath.cycleID(for: resetDate))
+
+        let result = engine.evaluate(
+            previous: snapshot(remaining: 72, reset: resetDate),
+            current: snapshot(remaining: 72, reset: resetDate.addingTimeInterval(30)),
+            now: now,
+            settings: .defaults,
+            state: state
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+        XCTAssertEqual(result.updatedState.cycleID, state.cycleID)
+    }
+
+    func testLegacyCycleIDDoesNotEmitResetAfterNormalization() {
+        let legacyCycleID = String(Int(resetDate.timeIntervalSince1970))
+        let state = AlertState(cycleID: legacyCycleID)
+
+        let result = engine.evaluate(
+            previous: snapshot(remaining: 72, reset: resetDate),
+            current: snapshot(remaining: 72, reset: resetDate.addingTimeInterval(30)),
+            now: now,
+            settings: .defaults,
+            state: state
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+        XCTAssertEqual(result.updatedState.cycleID, QuotaMath.cycleID(for: resetDate))
+    }
+
     func testExhaustedHasPriorityOverCountdown() {
         let almostReset = now.addingTimeInterval(60 * 60)
         let result = engine.evaluate(

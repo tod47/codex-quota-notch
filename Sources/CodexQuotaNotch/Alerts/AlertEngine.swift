@@ -38,7 +38,8 @@ public struct AlertEngine: Sendable {
         var cycleChanged = false
 
         if let currentCycleID = current.cycleID {
-            if let storedCycleID = nextState.cycleID, storedCycleID != currentCycleID {
+            let storedCycleID = QuotaMath.normalizedCycleID(nextState.cycleID)
+            if let storedCycleID, storedCycleID != currentCycleID {
                 nextState = AlertState(cycleID: currentCycleID)
                 cycleChanged = true
             } else {

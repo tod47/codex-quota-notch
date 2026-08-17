@@ -1,12 +1,24 @@
 import Foundation
 
 public enum QuotaMath {
+    private static let cycleIDResolution: TimeInterval = 60 * 60
+
     public static func remainingPercent(fromUsedPercent value: Double) -> Int {
         Int(floor(min(100, max(0, 100 - value))))
     }
 
     public static func cycleID(for resetDate: Date?) -> String? {
-        resetDate.map { String(Int($0.timeIntervalSince1970)) }
+        resetDate.map { date in
+            // Codex session logs can recalculate the same reset time with
+            // small second-level jitter. Keep those readings in one cycle.
+            let bucket = floor(date.timeIntervalSince1970 / cycleIDResolution) * cycleIDResolution
+            return String(Int(bucket))
+        }
+    }
+
+    public static func normalizedCycleID(_ cycleID: String?) -> String? {
+        guard let cycleID, let timestamp = Double(cycleID) else { return cycleID }
+        return self.cycleID(for: Date(timeIntervalSince1970: timestamp))
     }
 }
 
