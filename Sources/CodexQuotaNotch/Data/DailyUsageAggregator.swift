@@ -25,7 +25,7 @@ public struct DailyUsageAggregator: Sendable {
         for events in eventsByFile.values {
             var previous = 0
             for event in events.sorted(by: { $0.timestamp < $1.timestamp }) where event.kind == .tokenCount {
-                let current = effectiveTokenTotal(for: event)
+                let current = Self.effectiveTokenTotal(for: event)
                 guard current >= 0 else { continue }
 
                 if current >= previous {
@@ -40,7 +40,7 @@ public struct DailyUsageAggregator: Sendable {
         return result
     }
 
-    private func effectiveTokenTotal(for event: ParsedSessionEvent) -> Int {
+    static func effectiveTokenTotal(for event: ParsedSessionEvent) -> Int {
         if let totalUsage = event.totalUsage, totalUsage.effectiveTotal > 0 {
             return totalUsage.effectiveTotal
         }
