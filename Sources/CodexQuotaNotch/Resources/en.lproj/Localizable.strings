@@ -1,4 +1,5 @@
 "app.title" = "Codex Quota Notch";
+"app.quota" = "Codex Quota";
 "app.weekly.quota" = "Codex Weekly Quota";
 "app.weekly.quota.english" = "Codex Weekly Quota";
 "remaining" = "Remaining";
@@ -19,6 +20,8 @@
 "refresh" = "Refresh";
 "quit" = "Quit Codex Quota Notch";
 "weekly.remaining" = "Weekly remaining";
+"quota.weekly" = "Weekly quota";
+"quota.five.hour" = "5-hour quota";
 "reset.countdown" = "Until reset";
 "today.usage" = "Today’s usage";
 "recent.seven.days" = "Last 7 days tokens";
@@ -50,6 +53,7 @@
 "light" = "Light";
 "dark" = "Dark";
 "display.mode" = "Display mode";
+"show.five.hour.quota" = "Show 5-hour quota";
 "top.popup" = "Top popup";
 "top.popup.description" = "Show on hover, hide after leaving";
 "top.persistent" = "Top persistent";

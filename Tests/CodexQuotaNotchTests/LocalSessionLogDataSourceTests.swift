@@ -85,6 +85,35 @@ final class LocalSessionLogDataSourceTests: XCTestCase {
         XCTAssertEqual(snapshot.dailyTotals.count, 1)
     }
 
+    func testKeepsTheFiveHourLimitWhenAnotherShortWindowIsNewer() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let file = directory.appendingPathComponent("session.jsonl")
+        let contents = line(
+            timestamp: "2026-08-17T02:00:00.000Z",
+            usedPercent: 10,
+            totalTokens: 100,
+            shortWindowMinutes: 300,
+            shortUsedPercent: 25
+        ) + line(
+            timestamp: "2026-08-17T02:01:00.000Z",
+            usedPercent: 20,
+            totalTokens: 250,
+            shortWindowMinutes: 60,
+            shortUsedPercent: 99
+        )
+        try Data(contents.utf8).write(to: file)
+
+        let source = LocalSessionLogDataSource(rootDirectory: directory)
+        let calendar = fixedCalendar(timeZone: "UTC")
+        let now = date("2026-08-17T02:05:00.000Z")
+        let snapshot = try source.readSnapshot(now: now, calendar: calendar)
+
+        XCTAssertEqual(snapshot.secondaryLimit?.windowMinutes, 300)
+        XCTAssertEqual(snapshot.fiveHourRemainingPercent, 75)
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("CodexQuotaNotchTests-\(UUID().uuidString)", isDirectory: true)
@@ -99,9 +128,18 @@ final class LocalSessionLogDataSourceTests: XCTestCase {
         try handle.write(contentsOf: data)
     }
 
-    private func line(timestamp: String, usedPercent: Int, totalTokens: Int) -> String {
-        """
-        {"timestamp":"\(timestamp)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":\(totalTokens)}},"rate_limits":{"primary":{"window_minutes":10080,"used_percent":\(usedPercent),"resets_at":1787306400,"limit_name":"weekly"}}}}\n
+    private func line(
+        timestamp: String,
+        usedPercent: Int,
+        totalTokens: Int,
+        shortWindowMinutes: Int? = nil,
+        shortUsedPercent: Int = 0
+    ) -> String {
+        let secondary = shortWindowMinutes.map {
+            ",\"secondary\":{\"window_minutes\":\($0),\"used_percent\":\(shortUsedPercent),\"resets_at\":1787306400,\"limit_name\":\"short\"}"
+        } ?? ""
+        return """
+        {"timestamp":"\(timestamp)","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":\(totalTokens)}},"rate_limits":{"primary":{"window_minutes":10080,"used_percent":\(usedPercent),"resets_at":1787306400,"limit_name":"weekly"}\(secondary)}}}\n
         """
     }
 

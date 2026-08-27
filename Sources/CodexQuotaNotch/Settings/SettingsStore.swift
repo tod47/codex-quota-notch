@@ -45,6 +45,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var language: AppLanguage
     public var appearance: AppearanceMode
     public var displayMode: DisplayMode
+    public var showFiveHourQuota: Bool
     public var launchAtLogin: Bool
     public var overlayAlertsEnabled: Bool
     public var systemNotificationsEnabled: Bool
@@ -83,7 +84,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
             dataDirectoryPath: FileManager.default.homeDirectoryForCurrentUser
                 .appendingPathComponent(".codex/sessions", isDirectory: true).path,
             floatingFrame: CodableRect(x: 0, y: 0, width: 320, height: 230),
-            simulationMode: false
+            simulationMode: false,
+            showFiveHourQuota: true
         )
     }
 
@@ -106,11 +108,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
         dataDirectoryBookmark: Data?,
         dataDirectoryPath: String,
         floatingFrame: CodableRect,
-        simulationMode: Bool
+        simulationMode: Bool,
+        showFiveHourQuota: Bool = true
     ) {
         self.language = language
         self.appearance = appearance
         self.displayMode = displayMode
+        self.showFiveHourQuota = showFiveHourQuota
         self.launchAtLogin = launchAtLogin
         self.overlayAlertsEnabled = overlayAlertsEnabled
         self.systemNotificationsEnabled = systemNotificationsEnabled
@@ -133,6 +137,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case language
         case appearance
         case displayMode
+        case showFiveHourQuota
         case launchAtLogin
         case overlayAlertsEnabled
         case systemNotificationsEnabled
@@ -172,7 +177,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
             dataDirectoryBookmark: try container.decodeIfPresent(Data.self, forKey: .dataDirectoryBookmark),
             dataDirectoryPath: try container.decode(String.self, forKey: .dataDirectoryPath),
             floatingFrame: try container.decode(CodableRect.self, forKey: .floatingFrame),
-            simulationMode: try container.decode(Bool.self, forKey: .simulationMode)
+            simulationMode: try container.decode(Bool.self, forKey: .simulationMode),
+            showFiveHourQuota: try container.decodeIfPresent(Bool.self, forKey: .showFiveHourQuota) ?? true
         )
     }
 
@@ -181,6 +187,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try container.encode(language, forKey: .language)
         try container.encode(appearance, forKey: .appearance)
         try container.encode(displayMode, forKey: .displayMode)
+        try container.encode(showFiveHourQuota, forKey: .showFiveHourQuota)
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(overlayAlertsEnabled, forKey: .overlayAlertsEnabled)
         try container.encode(systemNotificationsEnabled, forKey: .systemNotificationsEnabled)

@@ -12,6 +12,7 @@ public final class AppModel: ObservableObject {
     private var monitor: QuotaMonitor?
     private var simulationTimer: Timer?
     private var simulationResetDate: Date?
+    private var simulationFiveHourResetDate: Date?
     private var simulationUsedPercent = 20.0
     private var previousSnapshot: QuotaSnapshot?
     private let alertEngine = AlertEngine()
@@ -81,6 +82,7 @@ public final class AppModel: ObservableObject {
         simulationTimer?.invalidate()
         simulationTimer = nil
         simulationResetDate = nil
+        simulationFiveHourResetDate = nil
     }
 
     public func rescan() {
@@ -129,6 +131,7 @@ public final class AppModel: ObservableObject {
         stopMonitoring()
         simulationUsedPercent = 20
         simulationResetDate = Date().addingTimeInterval(3 * 86_400)
+        simulationFiveHourResetDate = Date().addingTimeInterval(5 * 3_600)
         emitSimulationSnapshot()
 
         let timer = Timer(timeInterval: 5, repeats: true) { [weak self] _ in
@@ -147,6 +150,9 @@ public final class AppModel: ObservableObject {
         } else {
             simulationUsedPercent += 10
         }
+        if let resetDate = simulationFiveHourResetDate, resetDate <= Date() {
+            simulationFiveHourResetDate = Date().addingTimeInterval(5 * 3_600)
+        }
         emitSimulationSnapshot()
     }
 
@@ -160,7 +166,12 @@ public final class AppModel: ObservableObject {
                 resetsAt: simulationResetDate,
                 name: "simulation"
             ),
-            secondaryLimit: nil,
+            secondaryLimit: RateLimitSnapshot(
+                windowMinutes: 300,
+                usedPercent: min(100, simulationUsedPercent * 1.25),
+                resetsAt: simulationFiveHourResetDate,
+                name: "simulation"
+            ),
             dailyTokens: 24_000,
             dailyTotals: [today: 24_000],
             lastUpdatedAt: Date(),

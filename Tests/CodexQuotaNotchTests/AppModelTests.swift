@@ -58,6 +58,8 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.snapshot.weeklyLimit?.windowMinutes, 10_080)
         XCTAssertEqual(model.snapshot.remainingPercent, 80)
+        XCTAssertEqual(model.snapshot.fiveHourLimit?.windowMinutes, 300)
+        XCTAssertEqual(model.snapshot.fiveHourRemainingPercent, 75)
         XCTAssertEqual(model.snapshot.sourceStatus, .ready)
 
         model.stopSimulation()

@@ -1,4 +1,5 @@
 "app.title" = "Codex Quota Notch";
+"app.quota" = "Codex 额度";
 "app.weekly.quota" = "Codex 周额度";
 "app.weekly.quota.english" = "Codex Weekly Quota";
 "remaining" = "剩余";
@@ -19,6 +20,8 @@
 "refresh" = "刷新";
 "quit" = "退出 Codex Quota Notch";
 "weekly.remaining" = "周额度剩余";
+"quota.weekly" = "周额度";
+"quota.five.hour" = "5 小时额度";
 "reset.countdown" = "距离重置";
 "today.usage" = "今日使用量";
 "recent.seven.days" = "最近 7 天 token";
@@ -50,6 +53,7 @@
 "light" = "浅色";
 "dark" = "深色";
 "display.mode" = "展示模式";
+"show.five.hour.quota" = "显示 5 小时额度";
 "top.popup" = "顶部弹窗";
 "top.popup.description" = "悬停触发，离开后自动隐藏";
 "top.persistent" = "顶部常驻";

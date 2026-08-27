@@ -33,6 +33,42 @@ final class QuotaModelsTests: XCTestCase {
         XCTAssertEqual(snapshot.cycleID, "1735689600")
     }
 
+    func testSnapshotExposesOnlyTheFiveHourLimitAsFiveHourQuota() {
+        let resetDate = Date(timeIntervalSince1970: 1_735_689_600)
+        let fiveHour = RateLimitSnapshot(
+            windowMinutes: 300,
+            usedPercent: 25,
+            resetsAt: resetDate,
+            name: "5h"
+        )
+        let otherShortLimit = RateLimitSnapshot(
+            windowMinutes: 60,
+            usedPercent: 40,
+            resetsAt: resetDate,
+            name: "Hourly"
+        )
+
+        let fiveHourSnapshot = QuotaSnapshot(
+            weeklyLimit: nil,
+            secondaryLimit: fiveHour,
+            dailyTokens: 0,
+            lastUpdatedAt: resetDate,
+            sourceStatus: .ready
+        )
+        let otherShortLimitSnapshot = QuotaSnapshot(
+            weeklyLimit: nil,
+            secondaryLimit: otherShortLimit,
+            dailyTokens: 0,
+            lastUpdatedAt: resetDate,
+            sourceStatus: .ready
+        )
+
+        XCTAssertEqual(fiveHourSnapshot.fiveHourLimit, fiveHour)
+        XCTAssertEqual(fiveHourSnapshot.fiveHourRemainingPercent, 75)
+        XCTAssertNil(otherShortLimitSnapshot.fiveHourLimit)
+        XCTAssertNil(otherShortLimitSnapshot.fiveHourRemainingPercent)
+    }
+
     func testDefaultAlertSettingsMatchApprovedBehavior() {
         let settings = AlertSettings.defaults
 

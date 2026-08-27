@@ -35,7 +35,10 @@ public struct MainWindowView: View {
             Group {
                 switch selectedSection {
                 case .overview:
-                    OverviewPage(snapshot: snapshot)
+                    OverviewPage(
+                        snapshot: snapshot,
+                        showFiveHourQuota: settingsStore.settings.showFiveHourQuota
+                    )
                 case .alerts:
                     AlertsPage(settingsStore: settingsStore)
                 case .appearance:
@@ -89,6 +92,7 @@ private enum MainSection: String, CaseIterable, Hashable {
 
 private struct OverviewPage: View {
     let snapshot: QuotaSnapshot
+    let showFiveHourQuota: Bool
 
     var body: some View {
         ScrollView {
@@ -97,7 +101,7 @@ private struct OverviewPage: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
 
                 HStack(alignment: .top, spacing: 18) {
-                    OverlayView(snapshot: snapshot)
+                    OverlayView(snapshot: snapshot, showFiveHourQuota: showFiveHourQuota)
                     VStack(alignment: .leading, spacing: 12) {
                         MetricCard(title: L10n.text("weekly.remaining"), value: L10n.percentage(snapshot.remainingPercent), systemImage: "gauge.with.dots.needle.67percent")
                         MetricCard(title: L10n.text("today.usage"), value: L10n.number(snapshot.dailyTokens), systemImage: "number")
@@ -249,6 +253,7 @@ private struct AppearancePage: View {
                         Text(L10n.text(mode.localizationKey)).tag(mode)
                     }
                 }
+                Toggle(L10n.text("show.five.hour.quota"), isOn: binding(\.showFiveHourQuota))
                 Toggle(L10n.text("launch.at.login"), isOn: binding(\.launchAtLogin))
             }
 

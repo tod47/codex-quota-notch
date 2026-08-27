@@ -22,5 +22,11 @@ final class LocalizationTests: XCTestCase {
         XCTAssertEqual(L10n.text("alerts", language: .chineseSimplified), "提醒")
         XCTAssertEqual(L10n.text("top.popup", language: .english), "Top popup")
         XCTAssertEqual(L10n.text("top.popup", language: .chineseSimplified), "顶部弹窗")
+        XCTAssertEqual(L10n.text("quota.weekly", language: .english), "Weekly quota")
+        XCTAssertEqual(L10n.text("quota.weekly", language: .chineseSimplified), "周额度")
+        XCTAssertEqual(L10n.text("quota.five.hour", language: .english), "5-hour quota")
+        XCTAssertEqual(L10n.text("quota.five.hour", language: .chineseSimplified), "5 小时额度")
+        XCTAssertEqual(L10n.text("show.five.hour.quota", language: .english), "Show 5-hour quota")
+        XCTAssertEqual(L10n.text("show.five.hour.quota", language: .chineseSimplified), "显示 5 小时额度")
     }
 }

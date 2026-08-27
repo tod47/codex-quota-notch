@@ -56,8 +56,8 @@ public final class LocalSessionLogDataSource: @unchecked Sendable {
         }
 
         let latestUpdatedAt = summaries.compactMap(\.latestTimestamp).max()
-        let weekly = latestLimit(from: summaries, secondary: false)
-        let secondary = latestLimit(from: summaries, secondary: true)
+        let weekly = latestLimit(from: summaries, fiveHour: false)
+        let fiveHour = latestLimit(from: summaries, fiveHour: true)
         let dailyTotals = mergedDailyTotals(from: summaries)
         let today = calendar.startOfDay(for: now)
 
@@ -72,7 +72,7 @@ public final class LocalSessionLogDataSource: @unchecked Sendable {
 
         return QuotaSnapshot(
             weeklyLimit: weekly,
-            secondaryLimit: secondary,
+            secondaryLimit: fiveHour,
             dailyTokens: dailyTotals[today, default: 0],
             dailyTotals: dailyTotals,
             lastUpdatedAt: latestUpdatedAt,
@@ -240,10 +240,10 @@ public final class LocalSessionLogDataSource: @unchecked Sendable {
 
     private func latestLimit(
         from summaries: [FileSummary],
-        secondary: Bool
+        fiveHour: Bool
     ) -> RateLimitSnapshot? {
         summaries
-            .compactMap { secondary ? $0.latestSecondary : $0.latestWeekly }
+            .compactMap { fiveHour ? $0.latestFiveHour : $0.latestWeekly }
             .max(by: { $0.timestamp < $1.timestamp })?
             .snapshot
     }
@@ -374,7 +374,7 @@ private struct TimedRateLimit {
 private struct FileSummary {
     var latestTimestamp: Date?
     var latestWeekly: TimedRateLimit?
-    var latestSecondary: TimedRateLimit?
+    var latestFiveHour: TimedRateLimit?
     var dailyTotals: [Date: Int] = [:]
     var previousTokenTotal = 0
     var lastEventTimestamp: Date?
@@ -392,8 +392,9 @@ private struct FileSummary {
                 if latestWeekly == nil || timedLimit.timestamp >= latestWeekly!.timestamp {
                     latestWeekly = timedLimit
                 }
-            } else if latestSecondary == nil || timedLimit.timestamp >= latestSecondary!.timestamp {
-                latestSecondary = timedLimit
+            } else if snapshot.windowMinutes == 300,
+                      latestFiveHour == nil || timedLimit.timestamp >= latestFiveHour!.timestamp {
+                latestFiveHour = timedLimit
             }
         }
 

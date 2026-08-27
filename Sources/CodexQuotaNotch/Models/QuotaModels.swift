@@ -105,6 +105,18 @@ public struct QuotaSnapshot: Equatable, Sendable {
         weeklyLimit.map { QuotaMath.remainingPercent(fromUsedPercent: $0.usedPercent) }
     }
 
+    /// The Plus 5-hour quota is represented by Codex as a 300-minute limit.
+    /// Keep the legacy `secondaryLimit` storage for compatibility, but do not
+    /// accidentally surface another short window as the 5-hour quota.
+    public var fiveHourLimit: RateLimitSnapshot? {
+        guard let secondaryLimit, secondaryLimit.windowMinutes == 300 else { return nil }
+        return secondaryLimit
+    }
+
+    public var fiveHourRemainingPercent: Int? {
+        fiveHourLimit.map { QuotaMath.remainingPercent(fromUsedPercent: $0.usedPercent) }
+    }
+
     public var resetsAt: Date? {
         weeklyLimit?.resetsAt
     }
