@@ -44,7 +44,8 @@ public struct OpenClawPushSettings: Codable, Equatable, Sendable {
             channel,
             target,
             accountID,
-            String(statusUpdatesEnabled)
+            String(statusUpdatesEnabled),
+            String(alertsEnabled)
         ].joined(separator: "|")
     }
 }

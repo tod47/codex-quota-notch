@@ -15,6 +15,13 @@ public final class AppModel: ObservableObject {
     private var simulationFiveHourResetDate: Date?
     private var simulationUsedPercent = 20.0
     private var previousSnapshot: QuotaSnapshot?
+    private let openClawClient: OpenClawHookClient
+    private let openClawPlanner = OpenClawPushPlanner()
+    private var openClawInFlightKeys: Set<String> = []
+    private var pendingOpenClawAlerts: [String: QuotaAlert] = [:]
+    private var pendingOpenClawCycleID: String?
+    private var openClawDeliveryGeneration = UUID()
+    private var openClawSettingsFingerprint: String
     private let alertEngine = AlertEngine()
     private let overlaySink: (QuotaAlert) -> Void
     private let notificationSink: (QuotaAlert) -> Void
@@ -25,9 +32,12 @@ public final class AppModel: ObservableObject {
         initialSnapshot: QuotaSnapshot? = nil,
         startMonitoring shouldStartMonitoring: Bool = true,
         overlaySink: @escaping (QuotaAlert) -> Void = { _ in },
-        notificationSink: @escaping (QuotaAlert) -> Void = { _ in }
+        notificationSink: @escaping (QuotaAlert) -> Void = { _ in },
+        openClawClient: OpenClawHookClient = OpenClawHookClient()
     ) {
         self.settingsStore = settingsStore
+        self.openClawClient = openClawClient
+        self.openClawSettingsFingerprint = settingsStore.settings.openClaw.deliveryFingerprint
         self.dataSource = dataSource ?? LocalSessionLogDataSource(
             rootDirectory: URL(fileURLWithPath: settingsStore.settings.dataDirectoryPath, isDirectory: true)
         )
@@ -69,6 +79,15 @@ public final class AppModel: ObservableObject {
     }
 
     public func applySettings(_ settings: AppSettings) {
+        if settings.openClaw.deliveryFingerprint != openClawSettingsFingerprint {
+            openClawSettingsFingerprint = settings.openClaw.deliveryFingerprint
+            openClawDeliveryGeneration = UUID()
+            openClawInFlightKeys.removeAll()
+            pendingOpenClawAlerts.removeAll()
+            pendingOpenClawCycleID = nil
+            settingsStore.resetOpenClawPushState()
+        }
+
         if settings.simulationMode {
             startSimulation()
         } else if simulationTimer != nil {
@@ -101,6 +120,7 @@ public final class AppModel: ObservableObject {
     }
 
     public func handle(snapshot: QuotaSnapshot) {
+        let previousSnapshot = self.previousSnapshot
         let evaluation = alertEngine.evaluate(
             previous: previousSnapshot,
             current: snapshot,
@@ -109,9 +129,14 @@ public final class AppModel: ObservableObject {
             state: settingsStore.alertState
         )
 
-        previousSnapshot = snapshot
+        self.previousSnapshot = snapshot
         self.snapshot = snapshot
         settingsStore.updateAlertState(evaluation.updatedState)
+        dispatchOpenClaw(
+            previous: previousSnapshot,
+            current: snapshot,
+            alerts: evaluation.alerts
+        )
 
         guard !evaluation.alerts.isEmpty else { return }
         lastAlert = evaluation.alerts.last
@@ -124,6 +149,25 @@ public final class AppModel: ObservableObject {
                 notificationSink(alert)
             }
         }
+
+    }
+
+    public func testOpenClaw() {
+        let settings = settingsStore.settings.openClaw
+        guard settings.enabled, settings.isAddressed,
+              let token = settingsStore.openClawToken,
+              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            settingsStore.updateOpenClawDeliveryStatus(.notConfigured)
+            return
+        }
+
+        let event = OpenClawPushEvent(key: "test", kind: .test)
+        dispatchOpenClawEvent(
+            event,
+            snapshot: snapshot,
+            configuration: settings,
+            token: token
+        )
     }
 
     private func startSimulation() {
@@ -177,5 +221,110 @@ public final class AppModel: ObservableObject {
             lastUpdatedAt: Date(),
             sourceStatus: .ready
         ))
+    }
+
+    private func dispatchOpenClaw(
+        previous: QuotaSnapshot?,
+        current: QuotaSnapshot,
+        alerts: [QuotaAlert]
+    ) {
+        let settings = settingsStore.settings.openClaw
+        guard settings.enabled else { return }
+
+        if pendingOpenClawCycleID != current.cycleID {
+            pendingOpenClawAlerts.removeAll()
+            pendingOpenClawCycleID = current.cycleID
+        }
+        if settings.alertsEnabled {
+            for alert in alerts {
+                let key = openClawPlanner.alertKey(for: alert, cycleID: current.cycleID)
+                pendingOpenClawAlerts[key] = alert
+            }
+        }
+
+        let pendingAlerts = pendingOpenClawAlerts.values.sorted { lhs, rhs in
+            openClawPlanner.alertKey(for: lhs, cycleID: current.cycleID)
+                < openClawPlanner.alertKey(for: rhs, cycleID: current.cycleID)
+        }
+        let plan = openClawPlanner.evaluate(
+            previous: previous,
+            current: current,
+            alerts: pendingAlerts,
+            settings: settings,
+            state: settingsStore.openClawPushState
+        )
+        settingsStore.updateOpenClawPushState(plan.state)
+
+        guard let token = settingsStore.openClawToken,
+              !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            if !plan.events.isEmpty {
+                settingsStore.updateOpenClawDeliveryStatus(.notConfigured)
+            }
+            return
+        }
+
+        for event in plan.events {
+            dispatchOpenClawEvent(
+                event,
+                snapshot: current,
+                configuration: settings,
+                token: token
+            )
+        }
+    }
+
+    private func dispatchOpenClawEvent(
+        _ event: OpenClawPushEvent,
+        snapshot: QuotaSnapshot,
+        configuration: OpenClawPushSettings,
+        token: String
+    ) {
+        guard !openClawInFlightKeys.contains(event.key) else { return }
+
+        let message = OpenClawMessageFormatter.message(for: event, snapshot: snapshot)
+        let generation = openClawDeliveryGeneration
+        openClawInFlightKeys.insert(event.key)
+        settingsStore.updateOpenClawDeliveryStatus(.sending)
+
+        let client = openClawClient
+        Task { [weak self] in
+            do {
+                try await client.send(
+                    message: message,
+                    configuration: configuration,
+                    token: token
+                )
+                await MainActor.run { [weak self] in
+                    self?.finishOpenClawEvent(event, generation: generation, succeeded: true)
+                }
+            } catch {
+                await MainActor.run { [weak self] in
+                    self?.finishOpenClawEvent(event, generation: generation, succeeded: false)
+                }
+            }
+        }
+    }
+
+    private func finishOpenClawEvent(
+        _ event: OpenClawPushEvent,
+        generation: UUID,
+        succeeded: Bool
+    ) {
+        openClawInFlightKeys.remove(event.key)
+        guard generation == openClawDeliveryGeneration else { return }
+
+        if succeeded {
+            let nextState = openClawPlanner.markDelivered(
+                event,
+                state: settingsStore.openClawPushState
+            )
+            settingsStore.updateOpenClawPushState(nextState)
+            if case .alert = event.kind {
+                pendingOpenClawAlerts.removeValue(forKey: event.key)
+            }
+            settingsStore.updateOpenClawDeliveryStatus(.delivered)
+        } else {
+            settingsStore.updateOpenClawDeliveryStatus(.failed)
+        }
     }
 }
