@@ -231,9 +231,10 @@ public final class AppModel: ObservableObject {
         let settings = settingsStore.settings.openClaw
         guard settings.enabled else { return }
 
-        if pendingOpenClawCycleID != current.cycleID {
+        if let currentCycleID = current.cycleID,
+           pendingOpenClawCycleID != currentCycleID {
             pendingOpenClawAlerts.removeAll()
-            pendingOpenClawCycleID = current.cycleID
+            pendingOpenClawCycleID = currentCycleID
         }
         if settings.alertsEnabled {
             for alert in alerts {
@@ -242,18 +243,28 @@ public final class AppModel: ObservableObject {
             }
         }
 
-        let pendingAlerts = pendingOpenClawAlerts.values.sorted { lhs, rhs in
-            openClawPlanner.alertKey(for: lhs, cycleID: current.cycleID)
-                < openClawPlanner.alertKey(for: rhs, cycleID: current.cycleID)
+        let pendingAlerts: [QuotaAlert]
+        if current.cycleID == nil {
+            // Keep failed weekly alerts queued, but wait for a snapshot with a
+            // valid weekly cycle before retrying them with a complete summary.
+            pendingAlerts = []
+        } else {
+            pendingAlerts = pendingOpenClawAlerts.values.sorted { lhs, rhs in
+                openClawPlanner.alertKey(for: lhs, cycleID: current.cycleID)
+                    < openClawPlanner.alertKey(for: rhs, cycleID: current.cycleID)
+            }
         }
+        let previousOpenClawState = settingsStore.openClawPushState
         let plan = openClawPlanner.evaluate(
             previous: previous,
             current: current,
             alerts: pendingAlerts,
             settings: settings,
-            state: settingsStore.openClawPushState
+            state: previousOpenClawState
         )
-        settingsStore.updateOpenClawPushState(plan.state)
+        if plan.state != previousOpenClawState {
+            settingsStore.updateOpenClawPushState(plan.state)
+        }
 
         guard let token = settingsStore.openClawToken,
               !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {

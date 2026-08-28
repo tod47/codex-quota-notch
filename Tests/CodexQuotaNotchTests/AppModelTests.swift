@@ -182,6 +182,46 @@ final class AppModelTests: XCTestCase {
         defaults.removePersistentDomain(forName: "CodexQuotaNotchTests.app-model-openclaw-retry")
     }
 
+    func testFailedOpenClawAlertWaitsForACompleteWeeklySnapshotBeforeRetrying() async throws {
+        let defaults = UserDefaults(suiteName: "CodexQuotaNotchTests.app-model-openclaw-incomplete")!
+        defaults.removePersistentDomain(forName: "CodexQuotaNotchTests.app-model-openclaw-incomplete")
+        let secrets = InMemoryAppModelSecretStore()
+        let settings = SettingsStore(defaults: defaults, secretStore: secrets)
+        var openClawSettings = addressedOpenClawSettings()
+        openClawSettings.statusUpdatesEnabled = false
+        settings.settings.openClaw = openClawSettings
+        XCTAssertTrue(settings.saveOpenClawToken("token"))
+
+        let transport = AppModelRecordingTransport(
+            responses: [
+                OpenClawHTTPResponse(statusCode: 503, data: Data()),
+                OpenClawHTTPResponse(statusCode: 200, data: Data())
+            ]
+        )
+        let model = AppModel(
+            settingsStore: settings,
+            startMonitoring: false,
+            openClawClient: OpenClawHookClient(
+                transport: transport,
+                retryPolicy: OpenClawRetryPolicy(maxAttempts: 1, baseDelayNanoseconds: 0)
+            )
+        )
+
+        model.handle(snapshot: snapshot(remaining: 100, fiveHourRemaining: 62))
+        model.handle(snapshot: snapshot(remaining: 78, fiveHourRemaining: 62))
+        try await waitForRequestCount(1, on: transport)
+        model.handle(snapshot: snapshotWithoutWeekly(fiveHourRemaining: 62))
+        try await Task.sleep(nanoseconds: 20_000_000)
+        let incompleteSnapshotRequestCount = await transport.requestCount()
+        XCTAssertEqual(incompleteSnapshotRequestCount, 1)
+
+        model.handle(snapshot: snapshot(remaining: 78, fiveHourRemaining: 62))
+        try await waitForRequestCount(2, on: transport)
+        let messages = await transport.messageValues()
+        XCTAssertTrue(messages.last?.contains("80%") == true)
+        defaults.removePersistentDomain(forName: "CodexQuotaNotchTests.app-model-openclaw-incomplete")
+    }
+
     private func addressedOpenClawSettings() -> OpenClawPushSettings {
         OpenClawPushSettings(
             enabled: true,
@@ -210,6 +250,20 @@ final class AppModelTests: XCTestCase {
             dailyTokens: 100,
             lastUpdatedAt: Date(),
             sourceStatus: .ready
+        )
+    }
+
+    private func snapshotWithoutWeekly(fiveHourRemaining: Int) -> QuotaSnapshot {
+        QuotaSnapshot(
+            weeklyLimit: nil,
+            secondaryLimit: RateLimitSnapshot(
+                windowMinutes: 300,
+                usedPercent: Double(100 - fiveHourRemaining),
+                resetsAt: Date(timeIntervalSince1970: 1_787_320_800)
+            ),
+            dailyTokens: 100,
+            lastUpdatedAt: Date(),
+            sourceStatus: .missingWeeklyLimit
         )
     }
 
