@@ -46,6 +46,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var appearance: AppearanceMode
     public var displayMode: DisplayMode
     public var showFiveHourQuota: Bool
+    public var openClaw: OpenClawPushSettings
     public var launchAtLogin: Bool
     public var overlayAlertsEnabled: Bool
     public var systemNotificationsEnabled: Bool
@@ -68,6 +69,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
             language: .system,
             appearance: .system,
             displayMode: .topPopup,
+            openClaw: .defaults,
             launchAtLogin: true,
             overlayAlertsEnabled: true,
             systemNotificationsEnabled: true,
@@ -93,6 +95,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         language: AppLanguage = .system,
         appearance: AppearanceMode,
         displayMode: DisplayMode,
+        openClaw: OpenClawPushSettings = .defaults,
         launchAtLogin: Bool,
         overlayAlertsEnabled: Bool,
         systemNotificationsEnabled: Bool,
@@ -115,6 +118,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.appearance = appearance
         self.displayMode = displayMode
         self.showFiveHourQuota = showFiveHourQuota
+        self.openClaw = openClaw
         self.launchAtLogin = launchAtLogin
         self.overlayAlertsEnabled = overlayAlertsEnabled
         self.systemNotificationsEnabled = systemNotificationsEnabled
@@ -138,6 +142,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case appearance
         case displayMode
         case showFiveHourQuota
+        case openClaw
         case launchAtLogin
         case overlayAlertsEnabled
         case systemNotificationsEnabled
@@ -162,6 +167,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
             language: try container.decodeIfPresent(AppLanguage.self, forKey: .language) ?? .system,
             appearance: try container.decode(AppearanceMode.self, forKey: .appearance),
             displayMode: try container.decode(DisplayMode.self, forKey: .displayMode),
+            openClaw: try container.decodeIfPresent(OpenClawPushSettings.self, forKey: .openClaw) ?? .defaults,
             launchAtLogin: try container.decode(Bool.self, forKey: .launchAtLogin),
             overlayAlertsEnabled: try container.decode(Bool.self, forKey: .overlayAlertsEnabled),
             systemNotificationsEnabled: try container.decode(Bool.self, forKey: .systemNotificationsEnabled),
@@ -188,6 +194,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         try container.encode(appearance, forKey: .appearance)
         try container.encode(displayMode, forKey: .displayMode)
         try container.encode(showFiveHourQuota, forKey: .showFiveHourQuota)
+        try container.encode(openClaw, forKey: .openClaw)
         try container.encode(launchAtLogin, forKey: .launchAtLogin)
         try container.encode(overlayAlertsEnabled, forKey: .overlayAlertsEnabled)
         try container.encode(systemNotificationsEnabled, forKey: .systemNotificationsEnabled)
@@ -239,13 +246,25 @@ public struct AppSettings: Codable, Equatable, Sendable {
 public final class SettingsStore: ObservableObject {
     @Published public var settings: AppSettings
     @Published public var alertState: AlertState
+    @Published public var openClawPushState: OpenClawPushState
+    @Published public private(set) var openClawDeliveryStatus: OpenClawDeliveryStatus = .idle
 
     private let defaults: UserDefaults
+    private let secretStore: any SecretStore
     private let settingsKey = "codex-quota-notch.settings.v1"
     private let alertStateKey = "codex-quota-notch.alert-state.v1"
+    private let openClawStateKey = "codex-quota-notch.openclaw-state.v1"
+    private let openClawTokenKey = "openclaw-hook-token"
 
-    public init(defaults: UserDefaults = .standard) {
+    public private(set) var openClawToken: String?
+
+    public init(
+        defaults: UserDefaults = .standard,
+        secretStore: any SecretStore = KeychainSecretStore()
+    ) {
         self.defaults = defaults
+        self.secretStore = secretStore
+        self.openClawToken = try? secretStore.read(key: openClawTokenKey)
 
         if let data = defaults.data(forKey: settingsKey),
            let decoded = try? JSONDecoder().decode(AppSettings.self, from: data) {
@@ -260,14 +279,23 @@ public final class SettingsStore: ObservableObject {
         } else {
             alertState = .empty
         }
+
+        if let data = defaults.data(forKey: openClawStateKey),
+           let decoded = try? JSONDecoder().decode(OpenClawPushState.self, from: data) {
+            openClawPushState = decoded
+        } else {
+            openClawPushState = .empty
+        }
     }
 
     public func save() {
         let encoder = JSONEncoder()
         if let settingsData = try? encoder.encode(settings.normalized()),
-           let stateData = try? encoder.encode(alertState) {
+           let stateData = try? encoder.encode(alertState),
+           let openClawStateData = try? encoder.encode(openClawPushState) {
             defaults.set(settingsData, forKey: settingsKey)
             defaults.set(stateData, forKey: alertStateKey)
+            defaults.set(openClawStateData, forKey: openClawStateKey)
         }
     }
 
@@ -279,5 +307,42 @@ public final class SettingsStore: ObservableObject {
     public func resetFloatingFrame() {
         settings.floatingFrame = AppSettings.defaults.floatingFrame
         save()
+    }
+
+    public func updateOpenClawPushState(_ state: OpenClawPushState) {
+        openClawPushState = state
+        save()
+    }
+
+    public func resetOpenClawPushState() {
+        openClawPushState = .empty
+        openClawDeliveryStatus = .idle
+        save()
+    }
+
+    @discardableResult
+    public func saveOpenClawToken(_ token: String) -> Bool {
+        do {
+            if token.isEmpty {
+                try secretStore.delete(key: openClawTokenKey)
+                openClawToken = nil
+            } else {
+                try secretStore.write(token, key: openClawTokenKey)
+                openClawToken = token
+            }
+            resetOpenClawPushState()
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    @discardableResult
+    public func clearOpenClawToken() -> Bool {
+        saveOpenClawToken("")
+    }
+
+    public func updateOpenClawDeliveryStatus(_ status: OpenClawDeliveryStatus) {
+        openClawDeliveryStatus = status
     }
 }
