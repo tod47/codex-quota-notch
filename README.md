@@ -21,9 +21,62 @@ The app is built with SwiftUI and AppKit for macOS 13 Ventura and newer. It read
 
 ## Privacy / 隐私
 
-所有数据都在本机读取。应用只提取时间戳、额度字段和 token 统计，不上传 prompt、回复内容、工具调用、API key 或原始 session 内容，也不会修改 Codex 的会话文件。
+默认情况下所有数据都只在本机读取。应用只提取时间戳、额度字段和 token 统计，不上传 prompt、回复内容、工具调用、API key 或原始 session 内容，也不会修改 Codex 的会话文件。
+
+如果你在设置中主动启用 OpenClaw 推送，应用只会把格式化后的周额度、5 小时额度、重置时间/倒计时和今日 token 摘要发送给你配置的 OpenClaw Gateway；原始 session 内容仍不会离开本机。Hook Token 只保存在 macOS Keychain 中，不会写入设置文件、Git 或日志。
 
 Codex 的本地 session 格式属于实现细节，未来格式变化可能导致部分字段暂时不可用；应用会显示“数据不可用”或“周额度不可用”，不会猜测额度。
+
+## OpenClaw / 微信推送
+
+应用通过 OpenClaw Gateway 的本机 Hook 接口发送通知，再由你已经配置好的微信通道投递到手机。它不实现微信登录或微信协议，也不会直接连接微信。默认推送关闭，只有在“OpenClaw / 微信推送”设置页填写并保存配置后才会发送。
+
+推荐的数据流是：
+
+```text
+Codex Quota Notch → http://127.0.0.1:18789/hooks/agent → OpenClaw → openclaw-weixin → 微信
+```
+
+在 OpenClaw Gateway 中启用 Hooks（示例只使用占位符；请把 Token 保存在本机安全位置）：
+
+```json5
+{
+  hooks: {
+    enabled: true,
+    token: "<dedicated-hook-token>",
+    path: "/hooks",
+    allowedAgentIds: ["main"],
+    allowRequestSessionKey: false
+  }
+}
+```
+
+然后在本应用设置页填写：
+
+- Gateway 地址：默认 `http://127.0.0.1:18789`；如果你的 Gateway 运行在其他受信任的本机或内网地址，可以改成对应的 `http`/`https` 地址。
+- OpenClaw 通道：微信插件通常填写 `openclaw-weixin`。
+- 微信接收 Target：填写 OpenClaw 微信通道要求的接收目标；应用不会猜测或自动发送给未知联系人。
+- Account ID：只有配置了多个微信账号时才需要填写，否则留空。
+- Hook Token：填写上面配置的专用 Hook Token，点击“保存 Token”。它会进入本机 Keychain，不会进入 `UserDefaults`。
+
+“推送额度状态变化”会在首次获得有效状态、百分比或重置周期变化时发送一条包含周额度和 5 小时额度的摘要；“推送额度提醒”会转发周额度的百分比、倒计时、重置和用尽提醒。相同状态不会重复推送，网络失败会在下一次额度更新时重试。5 小时周期变化会单独推送“5 小时额度已重置”。
+
+测试时可以先用占位符替换为你自己的值，在本机验证 Hook：
+
+```bash
+curl -X POST http://127.0.0.1:18789/hooks/agent \
+  -H 'Authorization: Bearer <dedicated-hook-token>' \
+  -H 'Content-Type: application/json' \
+  --data '{
+    "name": "codex-quota-notch",
+    "message": "Codex quota test",
+    "deliver": true,
+    "channel": "openclaw-weixin",
+    "to": "<wechat-target>"
+  }'
+```
+
+请保持 Gateway 只监听回环地址或受信任的内网，不要把 `/hooks` 直接暴露到公网；Hook Token 仅用于这个专用接口。当前应用不会在仓库中保存任何实际 Token、微信 Target 或账号信息。
 
 ## Build and run / 构建运行
 
@@ -67,6 +120,7 @@ Sources/CodexQuotaNotch/
 ├── Data/         JSONL 解析和 token 聚合
 ├── Models/       额度、快照和提醒模型
 ├── Monitoring/   本地文件监听与刷新
+├── OpenClaw/     安全配置、事件去重和 Gateway Hook 推送
 ├── Settings/     设置和提醒状态持久化
 └── UI/           SwiftUI 视图与 AppKit 窗口控制器
 ```

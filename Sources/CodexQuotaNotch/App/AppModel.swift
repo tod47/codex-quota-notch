@@ -17,7 +17,7 @@ public final class AppModel: ObservableObject {
     private var previousSnapshot: QuotaSnapshot?
     private let openClawClient: OpenClawHookClient
     private let openClawPlanner = OpenClawPushPlanner()
-    private var openClawInFlightKeys: Set<String> = []
+    private var openClawInFlightKeys: [String: UUID] = [:]
     private var pendingOpenClawAlerts: [String: QuotaAlert] = [:]
     private var pendingOpenClawCycleID: String?
     private var openClawDeliveryGeneration = UUID()
@@ -279,11 +279,11 @@ public final class AppModel: ObservableObject {
         configuration: OpenClawPushSettings,
         token: String
     ) {
-        guard !openClawInFlightKeys.contains(event.key) else { return }
+        guard openClawInFlightKeys[event.key] == nil else { return }
 
         let message = OpenClawMessageFormatter.message(for: event, snapshot: snapshot)
         let generation = openClawDeliveryGeneration
-        openClawInFlightKeys.insert(event.key)
+        openClawInFlightKeys[event.key] = generation
         settingsStore.updateOpenClawDeliveryStatus(.sending)
 
         let client = openClawClient
@@ -310,7 +310,8 @@ public final class AppModel: ObservableObject {
         generation: UUID,
         succeeded: Bool
     ) {
-        openClawInFlightKeys.remove(event.key)
+        guard openClawInFlightKeys[event.key] == generation else { return }
+        openClawInFlightKeys.removeValue(forKey: event.key)
         guard generation == openClawDeliveryGeneration else { return }
 
         if succeeded {

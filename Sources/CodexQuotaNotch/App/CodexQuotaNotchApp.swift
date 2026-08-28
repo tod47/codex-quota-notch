@@ -9,8 +9,9 @@ enum CodexQuotaNotchApp {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let settingsStore = SettingsStore()
+    private let settingsStore: SettingsStore
     private let triggerMonitor = TopTriggerMonitor()
+    private let openClawClient = OpenClawHookClient()
 
     private var notificationClient: NotificationClient!
     private var model: AppModel!
@@ -21,6 +22,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastLaunchAtLoginValue: Bool?
     private var isReady = false
     private var shouldOpenMainWindowWhenReady = false
+
+    override init() {
+        let secretStore = KeychainSecretStore()
+        self.settingsStore = SettingsStore(secretStore: secretStore)
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -36,7 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             notificationSink: { [weak self] alert in
                 self?.notificationClient?.send(alert)
-            }
+            },
+            openClawClient: openClawClient
         )
         model.applySettings(settingsStore.settings)
 
@@ -51,7 +59,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindowController = MainWindowController(
             settingsStore: settingsStore,
             onRescan: { [weak self] in self?.model.rescan() },
-            onChooseDataDirectory: { [weak self] in self?.chooseDataDirectory() }
+            onChooseDataDirectory: { [weak self] in self?.chooseDataDirectory() },
+            onTestOpenClaw: { [weak self] in self?.model.testOpenClaw() }
         )
 
         menuBarController = MenuBarController(

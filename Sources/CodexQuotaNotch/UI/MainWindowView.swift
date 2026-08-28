@@ -5,6 +5,7 @@ public struct MainWindowView: View {
     @ObservedObject public var settingsStore: SettingsStore
     public let onRescan: () -> Void
     public let onChooseDataDirectory: () -> Void
+    public let onTestOpenClaw: () -> Void
 
     @State private var selectedSection: MainSection = .appearance
 
@@ -12,12 +13,14 @@ public struct MainWindowView: View {
         snapshot: QuotaSnapshot,
         settingsStore: SettingsStore,
         onRescan: @escaping () -> Void = {},
-        onChooseDataDirectory: @escaping () -> Void = {}
+        onChooseDataDirectory: @escaping () -> Void = {},
+        onTestOpenClaw: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.settingsStore = settingsStore
         self.onRescan = onRescan
         self.onChooseDataDirectory = onChooseDataDirectory
+        self.onTestOpenClaw = onTestOpenClaw
     }
 
     public var body: some View {
@@ -43,6 +46,8 @@ public struct MainWindowView: View {
                     AlertsPage(settingsStore: settingsStore)
                 case .appearance:
                     AppearancePage(settingsStore: settingsStore)
+                case .openClaw:
+                    OpenClawPage(settingsStore: settingsStore, onTest: onTestOpenClaw)
                 case .data:
                     DataPrivacyPage(snapshot: snapshot, settingsStore: settingsStore, onRescan: onRescan, onChooseDataDirectory: onChooseDataDirectory)
                 }
@@ -69,6 +74,7 @@ private enum MainSection: String, CaseIterable, Hashable {
     case overview
     case alerts
     case appearance
+    case openClaw
     case data
 
     var localizationKey: String {
@@ -76,6 +82,7 @@ private enum MainSection: String, CaseIterable, Hashable {
         case .overview: return "overview"
         case .alerts: return "alerts"
         case .appearance: return "appearance.display"
+        case .openClaw: return "openclaw"
         case .data: return "data.privacy"
         }
     }
@@ -85,6 +92,7 @@ private enum MainSection: String, CaseIterable, Hashable {
         case .overview: return "gauge.with.dots.needle.67percent"
         case .alerts: return "bell.badge"
         case .appearance: return "paintbrush"
+        case .openClaw: return "message.badge"
         case .data: return "lock.shield"
         }
     }
@@ -276,6 +284,120 @@ private struct AppearancePage: View {
             get: { settingsStore.settings[keyPath: keyPath] },
             set: {
                 settingsStore.settings[keyPath: keyPath] = $0
+                settingsStore.save()
+            }
+        )
+    }
+}
+
+private struct OpenClawPage: View {
+    @ObservedObject var settingsStore: SettingsStore
+    let onTest: () -> Void
+
+    @State private var tokenDraft = ""
+
+    var body: some View {
+        Form {
+            Section(L10n.text("openclaw")) {
+                Toggle(L10n.text("openclaw.enabled"), isOn: openClawBinding(\.enabled))
+                Text(L10n.text("openclaw.description"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(L10n.text("openclaw.connection")) {
+                TextField(L10n.text("openclaw.gateway.url"), text: openClawBinding(\.gatewayURL))
+                    .textFieldStyle(.roundedBorder)
+                TextField(L10n.text("openclaw.channel"), text: openClawBinding(\.channel))
+                    .textFieldStyle(.roundedBorder)
+                TextField(L10n.text("openclaw.target"), text: openClawBinding(\.target))
+                    .textFieldStyle(.roundedBorder)
+                TextField(L10n.text("openclaw.account"), text: openClawBinding(\.accountID))
+                    .textFieldStyle(.roundedBorder)
+                SecureField(L10n.text("openclaw.token"), text: $tokenDraft)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack {
+                    Button(L10n.text("openclaw.save.token")) {
+                        _ = settingsStore.saveOpenClawToken(tokenDraft)
+                    }
+                    Button(L10n.text("openclaw.clear.token")) {
+                        tokenDraft = ""
+                        _ = settingsStore.clearOpenClawToken()
+                    }
+                    Spacer()
+                    Label(
+                        settingsStore.openClawToken == nil
+                            ? L10n.text("openclaw.token.not.saved")
+                            : L10n.text("openclaw.token.saved"),
+                        systemImage: settingsStore.openClawToken == nil ? "key.slash" : "key.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Text(L10n.text("openclaw.keychain.description"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(L10n.text("openclaw.delivery")) {
+                Toggle(L10n.text("openclaw.status.updates"), isOn: openClawBinding(\.statusUpdatesEnabled))
+                Toggle(L10n.text("openclaw.alerts"), isOn: openClawBinding(\.alertsEnabled))
+
+                HStack {
+                    Button(L10n.text("openclaw.test"), action: onTest)
+                    Spacer()
+                    Label(deliveryStatusText, systemImage: deliveryStatusIcon)
+                        .font(.caption)
+                        .foregroundStyle(deliveryStatusColor)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding(20)
+        .id(settingsStore.settings.language)
+        .navigationTitle(L10n.text("openclaw"))
+        .onAppear {
+            tokenDraft = settingsStore.openClawToken ?? ""
+        }
+    }
+
+    private var deliveryStatusText: String {
+        switch settingsStore.openClawDeliveryStatus {
+        case .idle: return L10n.text("openclaw.status.idle")
+        case .notConfigured: return L10n.text("openclaw.status.not.configured")
+        case .sending: return L10n.text("openclaw.status.sending")
+        case .delivered: return L10n.text("openclaw.status.delivered")
+        case .failed: return L10n.text("openclaw.status.failed")
+        }
+    }
+
+    private var deliveryStatusIcon: String {
+        switch settingsStore.openClawDeliveryStatus {
+        case .idle: return "circle"
+        case .notConfigured: return "exclamationmark.triangle"
+        case .sending: return "arrow.up.circle"
+        case .delivered: return "checkmark.circle"
+        case .failed: return "xmark.circle"
+        }
+    }
+
+    private var deliveryStatusColor: Color {
+        switch settingsStore.openClawDeliveryStatus {
+        case .idle: return .secondary
+        case .notConfigured: return .orange
+        case .sending: return .accentColor
+        case .delivered: return .green
+        case .failed: return .red
+        }
+    }
+
+    private func openClawBinding<Value>(_ keyPath: WritableKeyPath<OpenClawPushSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { settingsStore.settings.openClaw[keyPath: keyPath] },
+            set: {
+                settingsStore.settings.openClaw[keyPath: keyPath] = $0
                 settingsStore.save()
             }
         )

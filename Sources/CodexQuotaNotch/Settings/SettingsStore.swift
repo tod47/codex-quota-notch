@@ -256,7 +256,7 @@ public final class SettingsStore: ObservableObject {
     private let openClawStateKey = "codex-quota-notch.openclaw-state.v1"
     private let openClawTokenKey = "openclaw-hook-token"
 
-    public private(set) var openClawToken: String?
+    @Published public private(set) var openClawToken: String?
 
     public init(
         defaults: UserDefaults = .standard,
