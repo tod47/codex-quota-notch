@@ -38,23 +38,23 @@
 - `KeychainSecretStore`: macOS Security implementation using service `com.codexquotanotch.openclaw`.
 - `AppSettings.openClaw`, `SettingsStore.openClawPushState`, `SettingsStore.openClawToken`, and `SettingsStore.saveOpenClawToken(_:)`.
 
-- [ ] **Step 1: Write the failing persistence and Keychain tests.**
+- [x] **Step 1: Write the failing persistence and Keychain tests.**
 
   Add tests proving that defaults are disabled, old settings without `openClaw` decode to defaults, state round-trips through `UserDefaults`, an in-memory secret store saves/reads/deletes a token, and a token is not present in encoded `AppSettings` JSON.
 
-- [ ] **Step 2: Run the focused tests to verify the expected red failure.**
+- [x] **Step 2: Run the focused tests to verify the expected red failure.**
 
   Run `swift test --filter 'OpenClawIntegrationTests|SettingsStoreTests'`. Expected failure: the new types and settings members do not exist.
 
-- [ ] **Step 3: Implement the model and secret-store interfaces.**
+- [x] **Step 3: Implement the model and secret-store interfaces.**
 
   Add Codable defaults and migration-safe `decodeIfPresent` handling. Keep the token outside `AppSettings` and make Keychain failures return a typed error; use an in-memory implementation only in tests.
 
-- [ ] **Step 4: Run the focused tests to verify green.**
+- [x] **Step 4: Run the focused tests to verify green.**
 
   Run `swift test --filter 'OpenClawIntegrationTests|SettingsStoreTests'`. Expected output: all selected tests pass with zero failures.
 
-- [ ] **Step 5: Commit the model and persistence slice.**
+- [x] **Step 5: Commit the model and persistence slice.**
 
   Run `git add Sources/CodexQuotaNotch/OpenClaw Sources/CodexQuotaNotch/Settings/SettingsStore.swift Tests/CodexQuotaNotchTests/OpenClawIntegrationTests.swift Tests/CodexQuotaNotchTests/SettingsStoreTests.swift && git commit -m "feat: add secure OpenClaw push settings"`.
 
@@ -75,23 +75,23 @@
 - `OpenClawPushPlanner.evaluate(previous:current:alerts:settings:state:)` and `markDelivered(_:state:)`.
 - `OpenClawMessageFormatter.message(for:snapshot:)` and `statusMessage(for:)`.
 
-- [ ] **Step 1: Write failing planner and formatter tests.**
+- [x] **Step 1: Write failing planner and formatter tests.**
 
   Cover: initial status event, no event for an unchanged snapshot after delivery, one five-hour reset event when the 300-minute cycle changes, status suppression while a reset is pending, weekly alert passthrough, Chinese and English summaries containing both quota percentages/reset values/today token, and no event when OpenClaw is disabled.
 
-- [ ] **Step 2: Run the focused tests to verify red.**
+- [x] **Step 2: Run the focused tests to verify red.**
 
   Run `swift test --filter OpenClawIntegrationTests`. Expected failure: planner, formatter, or localization keys are absent.
 
-- [ ] **Step 3: Implement pure event planning and localized formatting.**
+- [x] **Step 3: Implement pure event planning and localized formatting.**
 
   Use `QuotaMath.cycleID` for five-hour reset identity, a stable fingerprint composed only of remaining percentages and reset cycle IDs, and the existing `QuotaAlert` values for weekly alerts. Do not include raw JSONL content.
 
-- [ ] **Step 4: Run focused tests to verify green.**
+- [x] **Step 4: Run focused tests to verify green.**
 
   Run `swift test --filter OpenClawIntegrationTests`. Expected output: all planner/formatter tests pass.
 
-- [ ] **Step 5: Commit the planning slice.**
+- [x] **Step 5: Commit the planning slice.**
 
   Run `git add Sources/CodexQuotaNotch/OpenClaw Sources/CodexQuotaNotch/Localization.swift Sources/CodexQuotaNotch/Resources Tests/CodexQuotaNotchTests/OpenClawIntegrationTests.swift && git commit -m "feat: plan localized OpenClaw quota events"`.
 
@@ -108,23 +108,23 @@
 - `OpenClawRetryPolicy`.
 - `OpenClawHookClient.send(message:configuration:token:) async throws`.
 
-- [ ] **Step 1: Write failing HTTP-client tests.**
+- [x] **Step 1: Write failing HTTP-client tests.**
 
   Use an actor-backed recording transport to assert the `/hooks/agent` path, JSON fields, `Content-Type`, Bearer header, no request for invalid configuration, non-2xx errors, and retry up to three attempts.
 
-- [ ] **Step 2: Run the focused tests to verify red.**
+- [x] **Step 2: Run the focused tests to verify red.**
 
   Run `swift test --filter OpenClawIntegrationTests`. Expected failure: the client and transport interfaces are absent.
 
-- [ ] **Step 3: Implement request construction and bounded retry.**
+- [x] **Step 3: Implement request construction and bounded retry.**
 
   Validate URL scheme/host/token/channel/target before transport; append `hooks/agent`; omit empty optional `accountId`; retry only transport and HTTP failures with injectable zero-delay policy in tests.
 
-- [ ] **Step 4: Run focused tests to verify green.**
+- [x] **Step 4: Run focused tests to verify green.**
 
   Run `swift test --filter OpenClawIntegrationTests`. Expected output: all HTTP and retry tests pass.
 
-- [ ] **Step 5: Commit the client slice.**
+- [x] **Step 5: Commit the client slice.**
 
   Run `git add Sources/CodexQuotaNotch/OpenClaw/OpenClawHookClient.swift Tests/CodexQuotaNotchTests/OpenClawIntegrationTests.swift && git commit -m "feat: send quota events to OpenClaw hooks"`.
 
@@ -141,23 +141,23 @@
 - `AppModel.testOpenClaw()` sends a non-persistent test event.
 - `AppModel` owns only in-flight event keys and failed alert events; persisted state is updated after successful delivery.
 
-- [ ] **Step 1: Write failing AppModel integration tests.**
+- [x] **Step 1: Write failing AppModel integration tests.**
 
   Prove a configured model sends one initial status, does not send a duplicate on the same snapshot, emits a five-hour reset event on cycle change, queues a failed alert for the next snapshot, and never calls the transport when disabled or incomplete.
 
-- [ ] **Step 2: Run focused tests to verify red.**
+- [x] **Step 2: Run focused tests to verify red.**
 
   Run `swift test --filter 'AppModelTests|OpenClawIntegrationTests'`. Expected failure: AppModel has no OpenClaw client or event dispatch path.
 
-- [ ] **Step 3: Implement MainActor dispatch, state marking, and retry queue.**
+- [x] **Step 3: Implement MainActor dispatch, state marking, and retry queue.**
 
   Capture only immutable message/config/token values inside detached async work, update settings-store delivery state on the MainActor after success, remove in-flight keys in both success and failure paths, and keep failed alerts for a later snapshot without affecting existing overlay/system notification sinks.
 
-- [ ] **Step 4: Run focused tests to verify green.**
+- [x] **Step 4: Run focused tests to verify green.**
 
   Run `swift test --filter 'AppModelTests|OpenClawIntegrationTests'`. Expected output: all integration tests pass.
 
-- [ ] **Step 5: Commit the AppModel slice.**
+- [x] **Step 5: Commit the AppModel slice.**
 
   Run `git add Sources/CodexQuotaNotch/App/AppModel.swift Sources/CodexQuotaNotch/Settings/SettingsStore.swift Tests/CodexQuotaNotchTests/AppModelTests.swift Tests/CodexQuotaNotchTests/OpenClawIntegrationTests.swift && git commit -m "feat: dispatch quota events through OpenClaw"`.
 
@@ -177,23 +177,23 @@
 - `MainWindowController` forwards the test callback.
 - `AppDelegate` owns one `KeychainSecretStore`, injects one `OpenClawHookClient`, and wires `AppModel.testOpenClaw()`.
 
-- [ ] **Step 1: Write failing localization/settings UI tests.**
+- [x] **Step 1: Write failing localization/settings UI tests.**
 
   Assert both languages include the page title, connection labels, Keychain explanation, status text, test action, and status/alert toggle labels.
 
-- [ ] **Step 2: Run focused tests to verify red.**
+- [x] **Step 2: Run focused tests to verify red.**
 
   Run `swift test --filter LocalizationTests`. Expected failure: the new localization keys do not exist.
 
-- [ ] **Step 3: Implement the page and dependency wiring.**
+- [x] **Step 3: Implement the page and dependency wiring.**
 
   Use `SecureField` for a local token draft, explicit Save/Clear actions, bindings for non-secret settings, a test button, and no token value in accessibility text. Add the OpenClaw page to the existing navigation and keep the current appearance page unchanged.
 
-- [ ] **Step 4: Run focused tests and compile the app target.**
+- [x] **Step 4: Run focused tests and compile the app target.**
 
   Run `swift test --filter LocalizationTests` and `swift build`. Expected output: tests pass and the executable builds for macOS 13.
 
-- [ ] **Step 5: Commit the UI and wiring slice.**
+- [x] **Step 5: Commit the UI and wiring slice.**
 
   Run `git add Sources/CodexQuotaNotch/UI Sources/CodexQuotaNotch/App/CodexQuotaNotchApp.swift Sources/CodexQuotaNotch/Resources Tests/CodexQuotaNotchTests/LocalizationTests.swift && git commit -m "feat: configure OpenClaw push from settings"`.
 
@@ -204,26 +204,30 @@
 - Modify: `docs/superpowers/specs/2026-08-28-openclaw-integration-design.md` only if verification finds an inaccurate statement
 - Modify: `docs/superpowers/plans/2026-08-28-openclaw-integration.md` by checking completed steps
 
-- [ ] **Step 1: Add README setup and privacy instructions.**
+- [x] **Step 1: Add README setup and privacy instructions.**
 
   Document OpenClaw Hook configuration, `openclaw-weixin` channel/Target requirement, loopback security, Keychain storage, event deduplication, and a curl test with placeholders only.
 
-- [ ] **Step 2: Run the full test suite and static checks.**
+- [x] **Step 2: Run the full test suite and static checks.**
 
   Run `swift test`, `git diff --check`, and inspect `git status --short`. Expected output: zero test failures, no whitespace errors, and only intended files changed.
 
-- [ ] **Step 3: Build the macOS app bundle.**
+- [x] **Step 3: Build the macOS app bundle.**
 
   Run `./scripts/build-app.sh`; verify `Resources/Info.plist` still reports `LSMinimumSystemVersion` `13.0` and the bundle contains the SwiftPM resource bundle.
 
 - [ ] **Step 4: Manually verify the settings flow without transmitting credentials.**
 
+  The automated Computer Use check could not run because the macOS session was locked. No credentials were entered or transmitted; the target compiled successfully and the UI initializer/localization tests passed.
+
   Open the built app, navigate to OpenClaw settings, verify Chinese/English labels, verify the Token field is secure, toggle push/status/alert settings, and leave the actual Token/Target unchanged unless the user later supplies them locally.
 
-- [ ] **Step 5: Request an independent code review and inspect the final diff.**
+- [x] **Step 5: Request an independent code review and inspect the final diff.**
+
+  An independent reviewer was dispatched but timed out without returning a report. The final diff was then inspected locally against this checklist, including a generation-safe in-flight fix and a regression test for incomplete weekly snapshots.
 
   Review the final commits against this plan, fix Critical/Important findings, then rerun the full test and build commands.
 
-- [ ] **Step 6: Commit documentation and package changes.**
+- [x] **Step 6: Commit documentation and package changes.**
 
   Run `git add README.md docs/superpowers/specs/2026-08-28-openclaw-integration-design.md docs/superpowers/plans/2026-08-28-openclaw-integration.md && git commit -m "docs: document OpenClaw quota notifications"`.
