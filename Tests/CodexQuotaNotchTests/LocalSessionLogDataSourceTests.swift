@@ -114,6 +114,29 @@ final class LocalSessionLogDataSourceTests: XCTestCase {
         XCTAssertEqual(snapshot.fiveHourRemainingPercent, 75)
     }
 
+    func testInvalidatingCacheForcesTheNextReadToReparseFiles() throws {
+        let directory = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let file = directory.appendingPathComponent("session.jsonl")
+        let contents = line(timestamp: "2026-08-17T02:00:00.000Z", usedPercent: 10, totalTokens: 100)
+        try Data(contents.utf8).write(to: file)
+
+        let source = LocalSessionLogDataSource(rootDirectory: directory)
+        let calendar = fixedCalendar(timeZone: "UTC")
+        let now = date("2026-08-17T02:05:00.000Z")
+        XCTAssertEqual(try source.readSnapshot(now: now, calendar: calendar).remainingPercent, 90)
+        XCTAssertGreaterThan(source.lastReadBytes, 0)
+
+        XCTAssertEqual(try source.readSnapshot(now: now, calendar: calendar).remainingPercent, 90)
+        XCTAssertEqual(source.lastReadBytes, 0)
+
+        source.invalidateCache()
+
+        XCTAssertEqual(try source.readSnapshot(now: now, calendar: calendar).remainingPercent, 90)
+        XCTAssertGreaterThan(source.lastReadBytes, 0)
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("CodexQuotaNotchTests-\(UUID().uuidString)", isDirectory: true)

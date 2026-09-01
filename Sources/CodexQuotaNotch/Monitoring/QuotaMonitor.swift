@@ -63,10 +63,18 @@ public final class QuotaMonitor: @unchecked Sendable {
         }
     }
 
-    public func refreshNow() {
+    public func refreshNow(onComplete: (@Sendable () -> Void)? = nil) {
         queue.async { [weak self] in
-            guard let self, self.isRunning else { return }
-            self.requestRefresh()
+            guard let self, self.isRunning else {
+                onComplete?()
+                return
+            }
+            // An explicit refresh must not be discarded by an automatic
+            // refresh already waiting in the gate. Queue it directly and
+            // rebuild the data-source cache before reading.
+            self.dataSource.invalidateCache()
+            self.refresh()
+            onComplete?()
         }
     }
 

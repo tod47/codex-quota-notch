@@ -121,6 +121,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        model.$isRefreshing
+            .sink { [weak self] isRefreshing in
+                self?.overlayPanelController?.updateRefreshing(isRefreshing)
+            }
+            .store(in: &cancellables)
+
         settingsStore.$settings
             .sink { [weak self] settings in
                 guard let self else { return }

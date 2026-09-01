@@ -5,6 +5,7 @@ import Foundation
 public final class AppModel: ObservableObject {
     @Published public private(set) var snapshot: QuotaSnapshot
     @Published public private(set) var lastAlert: QuotaAlert?
+    @Published public private(set) var isRefreshing = false
 
     public let settingsStore: SettingsStore
 
@@ -105,7 +106,16 @@ public final class AppModel: ObservableObject {
     }
 
     public func rescan() {
-        monitor?.refreshNow()
+        guard let monitor else {
+            isRefreshing = false
+            return
+        }
+        isRefreshing = true
+        monitor.refreshNow { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.isRefreshing = false
+            }
+        }
     }
 
     public func setFastRefresh(_ enabled: Bool) {
@@ -131,6 +141,7 @@ public final class AppModel: ObservableObject {
 
         self.previousSnapshot = snapshot
         self.snapshot = snapshot
+        self.isRefreshing = false
         settingsStore.updateAlertState(evaluation.updatedState)
         dispatchOpenClaw(
             previous: previousSnapshot,

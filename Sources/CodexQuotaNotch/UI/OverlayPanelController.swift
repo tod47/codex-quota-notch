@@ -34,6 +34,7 @@ enum OverlayPanelUpdatePolicy {
 final class OverlayPanelController: NSObject, NSWindowDelegate {
     private let settingsStore: SettingsStore
     private var snapshot: QuotaSnapshot
+    private var isRefreshing = false
     private var panel: NSPanel?
     private var hostingView: NSHostingView<AnyView>?
     private var currentAlert: QuotaAlert?
@@ -60,6 +61,11 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
 
     func update(snapshot: QuotaSnapshot) {
         self.snapshot = snapshot
+        refreshContent()
+    }
+
+    func updateRefreshing(_ isRefreshing: Bool) {
+        self.isRefreshing = isRefreshing
         refreshContent()
     }
 
@@ -323,6 +329,7 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
             alert: currentAlert,
             onOpenMainWindow: onOpenMainWindow,
             onRefresh: onRefresh,
+            isRefreshing: isRefreshing,
             showFiveHourQuota: settingsStore.settings.showFiveHourQuota
         )
         return AnyView(view.preferredColorScheme(colorScheme))

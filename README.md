@@ -10,7 +10,7 @@ The app is built with SwiftUI and AppKit for macOS 13 Ventura and newer. It read
 - 选择 `window_minutes = 10080` 的限额作为七天周额度，并将 Plus 的 `window_minutes = 300` 限额作为 5 小时额度，不把其他短时限额误标成这两种额度。
 - 菜单栏实时显示剩余百分比，并按额度状态显示绿色、琥珀色或红色。
 - 顶部中心悬停弹窗同时显示周额度和 5 小时额度（各自的剩余百分比、重置日期与倒计时），以及今日 token 和数据状态；没有 5 小时数据时自动隐藏该区块。
-- 弹窗底部提供刷新按钮；当数据已过期或暂时不可用时，可以立即重新扫描本机 Codex session。
+- 弹窗底部提供刷新按钮；当数据已过期或暂时不可用时，可以立即强制重新扫描本机 Codex session，并显示刷新状态。
 - 可在“外观与展示”设置中独立开启或关闭 5 小时额度显示，默认开启；关闭只影响显示，不影响本地数据读取。
 - 剩余 90%、80%……20% 时按 10% 步进提醒；剩余 10% 至 1% 时逐 1% 提醒；用尽时单独提醒。
 - 在距离重置 2 天、1 天和 5 小时时提醒；检测到新周期后提示已重置。
@@ -27,6 +27,8 @@ The app is built with SwiftUI and AppKit for macOS 13 Ventura and newer. It read
 如果你在设置中主动启用 OpenClaw 推送，应用只会把格式化后的周额度、5 小时额度、重置时间/倒计时和今日 token 摘要发送给你配置的 OpenClaw Gateway；原始 session 内容仍不会离开本机。Hook Token 只保存在 macOS Keychain 中，不会写入设置文件、Git 或日志。
 
 Codex 的本地 session 格式属于实现细节，未来格式变化可能导致部分字段暂时不可用；应用会显示“数据不可用”或“周额度不可用”，不会猜测额度。
+
+弹窗中的“刷新”会强制重新扫描本机 session 文件并清除增量缓存。如果 Codex 尚未把新的 `rate_limits` 写入本地 session，刷新后仍会保留上一次真实记录并继续标记为过期，不会猜测新的重置时间。
 
 ## OpenClaw / 微信推送
 

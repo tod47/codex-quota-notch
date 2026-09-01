@@ -12,6 +12,7 @@
 "source.missing.weekly" = "Weekly quota unavailable";
 "source.stale" = "Data is stale";
 "source.unreadable" = "Data temporarily unavailable";
+"source.refreshing" = "Refreshing…";
 "overview" = "Overview";
 "alerts" = "Alerts";
 "appearance.display" = "Appearance & Display";

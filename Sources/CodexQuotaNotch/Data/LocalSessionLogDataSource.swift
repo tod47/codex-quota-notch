@@ -27,6 +27,15 @@ public final class LocalSessionLogDataSource: @unchecked Sendable {
         self.rootDirectory = rootDirectory
     }
 
+    /// Drops the incremental file cache so the next read parses every active
+    /// session file from the beginning. This is used by an explicit user
+    /// refresh when file metadata alone may not reveal an in-place update.
+    internal func invalidateCache() {
+        stateLock.lock()
+        fileCache.removeAll(keepingCapacity: true)
+        stateLock.unlock()
+    }
+
     public func readSnapshot(now: Date = Date(), calendar: Calendar = .current) throws -> QuotaSnapshot {
         stateLock.lock()
         defer { stateLock.unlock() }

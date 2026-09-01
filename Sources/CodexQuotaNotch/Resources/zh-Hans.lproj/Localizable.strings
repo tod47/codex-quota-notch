@@ -12,6 +12,7 @@
 "source.missing.weekly" = "暂时无法读取周额度";
 "source.stale" = "数据已过期";
 "source.unreadable" = "数据暂时无法读取";
+"source.refreshing" = "正在刷新…";
 "overview" = "总览";
 "alerts" = "提醒";
 "appearance.display" = "外观与展示";

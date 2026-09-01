@@ -5,6 +5,7 @@ public struct OverlayView: View {
     public let alert: QuotaAlert?
     public let onOpenMainWindow: (() -> Void)?
     public let onRefresh: (() -> Void)?
+    public let isRefreshing: Bool
     public let showFiveHourQuota: Bool
 
     public init(
@@ -12,12 +13,14 @@ public struct OverlayView: View {
         alert: QuotaAlert? = nil,
         onOpenMainWindow: (() -> Void)? = nil,
         onRefresh: (() -> Void)? = nil,
+        isRefreshing: Bool = false,
         showFiveHourQuota: Bool = true
     ) {
         self.snapshot = snapshot
         self.alert = alert
         self.onOpenMainWindow = onOpenMainWindow
         self.onRefresh = onRefresh
+        self.isRefreshing = isRefreshing
         self.showFiveHourQuota = showFiveHourQuota
     }
 
@@ -78,10 +81,16 @@ public struct OverlayView: View {
                 Spacer()
                 if let onRefresh {
                     Button(action: onRefresh) {
-                        Image(systemName: "arrow.clockwise")
+                        if isRefreshing {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
                     }
                     .buttonStyle(.plain)
-                    .help(L10n.text("refresh"))
+                    .disabled(isRefreshing)
+                    .help(L10n.text(isRefreshing ? "source.refreshing" : "refresh"))
                 }
                 if let onOpenMainWindow {
                     Button(action: onOpenMainWindow) {
@@ -126,6 +135,9 @@ public struct OverlayView: View {
     }
 
     private var statusText: String {
+        if isRefreshing {
+            return L10n.text("source.refreshing")
+        }
         switch snapshot.sourceStatus {
         case .ready:
             return L10n.text("source.ready")
