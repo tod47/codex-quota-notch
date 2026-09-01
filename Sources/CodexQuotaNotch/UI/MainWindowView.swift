@@ -5,19 +5,22 @@ public struct MainWindowView: View {
     @ObservedObject public var settingsStore: SettingsStore
     public let onRescan: () -> Void
     public let onChooseDataDirectory: () -> Void
+    public let onTestOpenClaw: () -> Void
 
-    @State private var selectedSection: MainSection = .overview
+    @State private var selectedSection: MainSection = .appearance
 
     public init(
         snapshot: QuotaSnapshot,
         settingsStore: SettingsStore,
         onRescan: @escaping () -> Void = {},
-        onChooseDataDirectory: @escaping () -> Void = {}
+        onChooseDataDirectory: @escaping () -> Void = {},
+        onTestOpenClaw: @escaping () -> Void = {}
     ) {
         self.snapshot = snapshot
         self.settingsStore = settingsStore
         self.onRescan = onRescan
         self.onChooseDataDirectory = onChooseDataDirectory
+        self.onTestOpenClaw = onTestOpenClaw
     }
 
     public var body: some View {
@@ -28,22 +31,29 @@ public struct MainWindowView: View {
                         .tag(section)
                 }
             }
+            .id(settingsStore.settings.language)
             .navigationTitle(L10n.text("app.title"))
             .frame(minWidth: 190)
         } detail: {
             Group {
                 switch selectedSection {
                 case .overview:
-                    OverviewPage(snapshot: snapshot)
+                    OverviewPage(
+                        snapshot: snapshot,
+                        showFiveHourQuota: settingsStore.settings.showFiveHourQuota
+                    )
                 case .alerts:
                     AlertsPage(settingsStore: settingsStore)
                 case .appearance:
                     AppearancePage(settingsStore: settingsStore)
+                case .openClaw:
+                    OpenClawPage(settingsStore: settingsStore, onTest: onTestOpenClaw)
                 case .data:
                     DataPrivacyPage(snapshot: snapshot, settingsStore: settingsStore, onRescan: onRescan, onChooseDataDirectory: onChooseDataDirectory)
                 }
             }
             .frame(minWidth: 610, maxWidth: .infinity, maxHeight: .infinity)
+            .id(settingsStore.settings.language)
         }
         .frame(minWidth: 820, minHeight: 560)
         .preferredColorScheme(settingsStore.settings.appearance.colorScheme)
@@ -64,6 +74,7 @@ private enum MainSection: String, CaseIterable, Hashable {
     case overview
     case alerts
     case appearance
+    case openClaw
     case data
 
     var localizationKey: String {
@@ -71,6 +82,7 @@ private enum MainSection: String, CaseIterable, Hashable {
         case .overview: return "overview"
         case .alerts: return "alerts"
         case .appearance: return "appearance.display"
+        case .openClaw: return "openclaw"
         case .data: return "data.privacy"
         }
     }
@@ -80,6 +92,7 @@ private enum MainSection: String, CaseIterable, Hashable {
         case .overview: return "gauge.with.dots.needle.67percent"
         case .alerts: return "bell.badge"
         case .appearance: return "paintbrush"
+        case .openClaw: return "message.badge"
         case .data: return "lock.shield"
         }
     }
@@ -87,6 +100,7 @@ private enum MainSection: String, CaseIterable, Hashable {
 
 private struct OverviewPage: View {
     let snapshot: QuotaSnapshot
+    let showFiveHourQuota: Bool
 
     var body: some View {
         ScrollView {
@@ -95,7 +109,7 @@ private struct OverviewPage: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
 
                 HStack(alignment: .top, spacing: 18) {
-                    OverlayView(snapshot: snapshot)
+                    OverlayView(snapshot: snapshot, showFiveHourQuota: showFiveHourQuota)
                     VStack(alignment: .leading, spacing: 12) {
                         MetricCard(title: L10n.text("weekly.remaining"), value: L10n.percentage(snapshot.remainingPercent), systemImage: "gauge.with.dots.needle.67percent")
                         MetricCard(title: L10n.text("today.usage"), value: L10n.number(snapshot.dailyTokens), systemImage: "number")
@@ -192,7 +206,7 @@ private struct AlertsPage: View {
                 Toggle(L10n.text("exhausted.alerts"), isOn: binding(\.exhaustedAlertsEnabled))
             }
 
-            Section("阈值 / Thresholds") {
+            Section(L10n.text("thresholds")) {
                 Stepper(value: binding(\.ordinaryStep), in: 1...50) {
                     LabeledContent(L10n.text("ordinary.step"), value: "\(settingsStore.settings.ordinaryStep)%")
                 }
@@ -204,13 +218,14 @@ private struct AlertsPage: View {
                 }
             }
 
-            Section("提醒通道 / Channels") {
+            Section(L10n.text("channels")) {
                 Toggle(L10n.text("overlay.alerts"), isOn: binding(\.overlayAlertsEnabled))
                 Toggle(L10n.text("system.notifications"), isOn: binding(\.systemNotificationsEnabled))
             }
         }
         .formStyle(.grouped)
         .padding(20)
+        .id(settingsStore.settings.language)
         .navigationTitle(L10n.text("alerts"))
     }
 
@@ -231,6 +246,11 @@ private struct AppearancePage: View {
     var body: some View {
         Form {
             Section(L10n.text("appearance")) {
+                Picker(L10n.text("language"), selection: binding(\.language)) {
+                    ForEach(AppLanguage.allCases, id: \.self) { language in
+                        Text(L10n.text(language.localizationKey)).tag(language)
+                    }
+                }
                 Picker(L10n.text("appearance"), selection: binding(\.appearance)) {
                     ForEach(AppearanceMode.allCases, id: \.self) { mode in
                         Text(L10n.text(mode.localizationKey)).tag(mode)
@@ -241,12 +261,13 @@ private struct AppearancePage: View {
                         Text(L10n.text(mode.localizationKey)).tag(mode)
                     }
                 }
+                Toggle(L10n.text("show.five.hour.quota"), isOn: binding(\.showFiveHourQuota))
                 Toggle(L10n.text("launch.at.login"), isOn: binding(\.launchAtLogin))
             }
 
             Section(L10n.text("floating")) {
-                LabeledContent("Width", value: "\(Int(settingsStore.settings.floatingFrame.width)) pt")
-                LabeledContent("Height", value: "\(Int(settingsStore.settings.floatingFrame.height)) pt")
+                LabeledContent(L10n.text("width"), value: "\(Int(settingsStore.settings.floatingFrame.width)) pt")
+                LabeledContent(L10n.text("height"), value: "\(Int(settingsStore.settings.floatingFrame.height)) pt")
                 Button(L10n.text("reset.floating.frame")) {
                     settingsStore.resetFloatingFrame()
                 }
@@ -254,6 +275,7 @@ private struct AppearancePage: View {
         }
         .formStyle(.grouped)
         .padding(20)
+        .id(settingsStore.settings.language)
         .navigationTitle(L10n.text("appearance.display"))
     }
 
@@ -262,6 +284,120 @@ private struct AppearancePage: View {
             get: { settingsStore.settings[keyPath: keyPath] },
             set: {
                 settingsStore.settings[keyPath: keyPath] = $0
+                settingsStore.save()
+            }
+        )
+    }
+}
+
+private struct OpenClawPage: View {
+    @ObservedObject var settingsStore: SettingsStore
+    let onTest: () -> Void
+
+    @State private var tokenDraft = ""
+
+    var body: some View {
+        Form {
+            Section(L10n.text("openclaw")) {
+                Toggle(L10n.text("openclaw.enabled"), isOn: openClawBinding(\.enabled))
+                Text(L10n.text("openclaw.description"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(L10n.text("openclaw.connection")) {
+                TextField(L10n.text("openclaw.gateway.url"), text: openClawBinding(\.gatewayURL))
+                    .textFieldStyle(.roundedBorder)
+                TextField(L10n.text("openclaw.channel"), text: openClawBinding(\.channel))
+                    .textFieldStyle(.roundedBorder)
+                TextField(L10n.text("openclaw.target"), text: openClawBinding(\.target))
+                    .textFieldStyle(.roundedBorder)
+                TextField(L10n.text("openclaw.account"), text: openClawBinding(\.accountID))
+                    .textFieldStyle(.roundedBorder)
+                SecureField(L10n.text("openclaw.token"), text: $tokenDraft)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack {
+                    Button(L10n.text("openclaw.save.token")) {
+                        _ = settingsStore.saveOpenClawToken(tokenDraft)
+                    }
+                    Button(L10n.text("openclaw.clear.token")) {
+                        tokenDraft = ""
+                        _ = settingsStore.clearOpenClawToken()
+                    }
+                    Spacer()
+                    Label(
+                        settingsStore.openClawToken == nil
+                            ? L10n.text("openclaw.token.not.saved")
+                            : L10n.text("openclaw.token.saved"),
+                        systemImage: settingsStore.openClawToken == nil ? "key.slash" : "key.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Text(L10n.text("openclaw.keychain.description"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section(L10n.text("openclaw.delivery")) {
+                Toggle(L10n.text("openclaw.status.updates"), isOn: openClawBinding(\.statusUpdatesEnabled))
+                Toggle(L10n.text("openclaw.alerts"), isOn: openClawBinding(\.alertsEnabled))
+
+                HStack {
+                    Button(L10n.text("openclaw.test"), action: onTest)
+                    Spacer()
+                    Label(deliveryStatusText, systemImage: deliveryStatusIcon)
+                        .font(.caption)
+                        .foregroundStyle(deliveryStatusColor)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding(20)
+        .id(settingsStore.settings.language)
+        .navigationTitle(L10n.text("openclaw"))
+        .onAppear {
+            tokenDraft = settingsStore.openClawToken ?? ""
+        }
+    }
+
+    private var deliveryStatusText: String {
+        switch settingsStore.openClawDeliveryStatus {
+        case .idle: return L10n.text("openclaw.status.idle")
+        case .notConfigured: return L10n.text("openclaw.status.not.configured")
+        case .sending: return L10n.text("openclaw.status.sending")
+        case .delivered: return L10n.text("openclaw.status.delivered")
+        case .failed: return L10n.text("openclaw.status.failed")
+        }
+    }
+
+    private var deliveryStatusIcon: String {
+        switch settingsStore.openClawDeliveryStatus {
+        case .idle: return "circle"
+        case .notConfigured: return "exclamationmark.triangle"
+        case .sending: return "arrow.up.circle"
+        case .delivered: return "checkmark.circle"
+        case .failed: return "xmark.circle"
+        }
+    }
+
+    private var deliveryStatusColor: Color {
+        switch settingsStore.openClawDeliveryStatus {
+        case .idle: return .secondary
+        case .notConfigured: return .orange
+        case .sending: return .accentColor
+        case .delivered: return .green
+        case .failed: return .red
+        }
+    }
+
+    private func openClawBinding<Value>(_ keyPath: WritableKeyPath<OpenClawPushSettings, Value>) -> Binding<Value> {
+        Binding(
+            get: { settingsStore.settings.openClaw[keyPath: keyPath] },
+            set: {
+                settingsStore.settings.openClaw[keyPath: keyPath] = $0
                 settingsStore.save()
             }
         )
@@ -283,7 +419,7 @@ private struct DataPrivacyPage: View {
                         .multilineTextAlignment(.trailing)
                 }
                 LabeledContent(L10n.text("last.updated"), value: L10n.date(snapshot.lastUpdatedAt))
-                LabeledContent("Status", value: sourceStatus)
+                LabeledContent(L10n.text("status"), value: sourceStatus)
                 HStack {
                     Button(L10n.text("choose.folder"), action: onChooseDataDirectory)
                     Button(L10n.text("rescan"), action: onRescan)
@@ -304,6 +440,7 @@ private struct DataPrivacyPage: View {
         }
         .formStyle(.grouped)
         .padding(20)
+        .id(settingsStore.settings.language)
         .navigationTitle(L10n.text("data.privacy"))
     }
 
@@ -342,6 +479,16 @@ private extension AppearanceMode {
         case .system: return "system"
         case .light: return "light"
         case .dark: return "dark"
+        }
+    }
+}
+
+private extension AppLanguage {
+    var localizationKey: String {
+        switch self {
+        case .system: return "language.system"
+        case .english: return "language.english"
+        case .chineseSimplified: return "language.chinese"
         }
     }
 }

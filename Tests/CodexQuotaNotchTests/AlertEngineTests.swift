@@ -19,6 +19,30 @@ final class AlertEngineTests: XCTestCase {
         XCTAssertEqual(result.alerts.map(\.kind), [.percentage(80)])
     }
 
+    func testDoesNotEmitPercentageForInitialSnapshotBelowThreshold() {
+        let result = engine.evaluate(
+            previous: nil,
+            current: snapshot(remaining: 73, reset: resetDate),
+            now: now,
+            settings: .defaults,
+            state: .empty
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+    }
+
+    func testDoesNotEmitPercentageWhenCurrentValueStaysWithinThresholdBand() {
+        let result = engine.evaluate(
+            previous: snapshot(remaining: 74, reset: resetDate),
+            current: snapshot(remaining: 73, reset: resetDate),
+            now: now,
+            settings: .defaults,
+            state: .empty
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+    }
+
     func testCriticalZoneEmitsEachPercentOnce() {
         var state = AlertState.empty
         let first = engine.evaluate(
@@ -72,6 +96,37 @@ final class AlertEngineTests: XCTestCase {
         XCTAssertEqual(result.updatedState.cycleID, QuotaMath.cycleID(for: newReset))
         XCTAssertTrue(result.updatedState.emittedKeys.contains("reset"))
         XCTAssertFalse(result.updatedState.emittedKeys.contains("percentage:80"))
+    }
+
+    func testResetTimestampJitterDoesNotEmitReset() {
+        let state = AlertState(cycleID: QuotaMath.cycleID(for: resetDate))
+
+        let result = engine.evaluate(
+            previous: snapshot(remaining: 72, reset: resetDate),
+            current: snapshot(remaining: 72, reset: resetDate.addingTimeInterval(30)),
+            now: now,
+            settings: .defaults,
+            state: state
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+        XCTAssertEqual(result.updatedState.cycleID, state.cycleID)
+    }
+
+    func testLegacyCycleIDDoesNotEmitResetAfterNormalization() {
+        let legacyCycleID = String(Int(resetDate.timeIntervalSince1970))
+        let state = AlertState(cycleID: legacyCycleID)
+
+        let result = engine.evaluate(
+            previous: snapshot(remaining: 72, reset: resetDate),
+            current: snapshot(remaining: 72, reset: resetDate.addingTimeInterval(30)),
+            now: now,
+            settings: .defaults,
+            state: state
+        )
+
+        XCTAssertTrue(result.alerts.isEmpty)
+        XCTAssertEqual(result.updatedState.cycleID, QuotaMath.cycleID(for: resetDate))
     }
 
     func testExhaustedHasPriorityOverCountdown() {

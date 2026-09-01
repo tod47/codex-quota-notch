@@ -9,8 +9,9 @@ enum CodexQuotaNotchApp {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let settingsStore = SettingsStore()
+    private let settingsStore: SettingsStore
     private let triggerMonitor = TopTriggerMonitor()
+    private let openClawClient = OpenClawHookClient()
 
     private var notificationClient: NotificationClient!
     private var model: AppModel!
@@ -19,9 +20,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var mainWindowController: MainWindowController!
     private var cancellables = Set<AnyCancellable>()
     private var lastLaunchAtLoginValue: Bool?
+    private var isReady = false
+    private var shouldOpenMainWindowWhenReady = false
+
+    override init() {
+        let secretStore = KeychainSecretStore()
+        self.settingsStore = SettingsStore(secretStore: secretStore)
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        L10n.setLanguage(settingsStore.settings.language)
 
         notificationClient = NotificationClient()
         notificationClient.requestAuthorization()
@@ -33,13 +43,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             notificationSink: { [weak self] alert in
                 self?.notificationClient?.send(alert)
-            }
+            },
+            openClawClient: openClawClient
         )
         model.applySettings(settingsStore.settings)
 
         overlayPanelController = OverlayPanelController(settingsStore: settingsStore, snapshot: model.snapshot)
         overlayPanelController.onOpenMainWindow = { [weak self] in
             self?.openMainWindow()
+        }
+        overlayPanelController.onRefresh = { [weak self] in
+            self?.model?.rescan()
         }
         overlayPanelController.onVisibilityChanged = { [weak self] isVisible in
             self?.model?.setFastRefresh(isVisible)
@@ -48,7 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainWindowController = MainWindowController(
             settingsStore: settingsStore,
             onRescan: { [weak self] in self?.model.rescan() },
-            onChooseDataDirectory: { [weak self] in self?.chooseDataDirectory() }
+            onChooseDataDirectory: { [weak self] in self?.chooseDataDirectory() },
+            onTestOpenClaw: { [weak self] in self?.model.testOpenClaw() }
         )
 
         menuBarController = MenuBarController(
@@ -65,6 +80,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.overlayPanelController?.handlePointer(point)
         }
         triggerMonitor.start()
+
+        isReady = true
+        if shouldOpenMainWindowWhenReady {
+            shouldOpenMainWindowWhenReady = false
+            openMainWindow()
+        } else {
+            // A menu bar app has no document to open when launched from Finder.
+            // Present its settings window once so double-clicking the .app has
+            // the same result as opening a normal macOS application.
+            DispatchQueue.main.async { [weak self] in
+                self?.openMainWindow()
+            }
+        }
+    }
+
+    func applicationShouldOpenUntitledFile(_ sender: NSApplication) -> Bool {
+        requestOpenMainWindow()
+        return false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        requestOpenMainWindow()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -83,9 +121,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        model.$isRefreshing
+            .sink { [weak self] isRefreshing in
+                self?.overlayPanelController?.updateRefreshing(isRefreshing)
+            }
+            .store(in: &cancellables)
+
         settingsStore.$settings
             .sink { [weak self] settings in
                 guard let self else { return }
+                L10n.setLanguage(settings.language)
+                self.menuBarController?.updateLanguage()
+                self.mainWindowController?.updateLanguage()
                 self.overlayPanelController?.updateSettings(settings)
                 self.model?.applySettings(settings)
                 self.syncLaunchAtLogin(settings.launchAtLogin)
@@ -95,6 +142,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func openMainWindow() {
         mainWindowController.show(snapshot: model.snapshot)
+    }
+
+    private func requestOpenMainWindow() {
+        guard isReady else {
+            shouldOpenMainWindowWhenReady = true
+            return
+        }
+        openMainWindow()
     }
 
     private func chooseDataDirectory() {

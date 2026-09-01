@@ -27,18 +27,25 @@ public struct ParsedSessionEvent: Equatable, Sendable {
     }
 }
 
-public struct JSONLSessionParser: Sendable {
-    public init() {}
+public final class JSONLSessionParser: @unchecked Sendable {
+    private let decoder = JSONDecoder()
+    private let fractionalDateFormatter: ISO8601DateFormatter
+    private let dateFormatter: ISO8601DateFormatter
+
+    public init() {
+        self.fractionalDateFormatter = Self.makeDateFormatter(withFractionalSeconds: true)
+        self.dateFormatter = Self.makeDateFormatter(withFractionalSeconds: false)
+    }
 
     public func parseLine(_ data: Data) -> ParsedSessionEvent? {
-        guard let envelope = try? JSONDecoder().decode(RawEnvelope.self, from: data),
-              let timestamp = envelope.timestamp.date else {
+        guard let envelope = try? decoder.decode(RawEnvelope.self, from: data),
+              let timestamp = date(from: envelope.timestamp) else {
             return nil
         }
 
         let limits = [envelope.payload.rateLimits?.primary, envelope.payload.rateLimits?.secondary]
             .compactMap { $0 }
-            .compactMap { $0.snapshot }
+            .compactMap { snapshot(for: $0) }
 
         let kind: ParsedEventKind = envelope.type == "event_msg" && envelope.payload.type == "token_count"
             ? .tokenCount
@@ -51,6 +58,39 @@ public struct JSONLSessionParser: Sendable {
             lastUsage: envelope.payload.info?.lastTokenUsage?.usage,
             totalUsage: envelope.payload.info?.totalTokenUsage?.usage
         )
+    }
+
+    private func date(from value: FlexibleDate) -> Date? {
+        switch value.storage {
+        case .seconds(let seconds):
+            return Date(timeIntervalSince1970: seconds)
+        case .string(let string):
+            return fractionalDateFormatter.date(from: string) ?? dateFormatter.date(from: string)
+        case .unavailable:
+            return nil
+        }
+    }
+
+    private func snapshot(for value: RawRateLimit) -> RateLimitSnapshot? {
+        guard let windowMinutes = value.windowMinutes,
+              let usedPercent = value.usedPercent else {
+            return nil
+        }
+
+        return RateLimitSnapshot(
+            windowMinutes: windowMinutes,
+            usedPercent: usedPercent,
+            resetsAt: value.resetsAt.flatMap(date(from:)),
+            name: value.limitName
+        )
+    }
+
+    private static func makeDateFormatter(withFractionalSeconds: Bool) -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = withFractionalSeconds
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
+        return formatter
     }
 }
 
@@ -129,35 +169,30 @@ private struct RawRateLimit: Decodable {
         case limitName = "limit_name"
     }
 
-    var snapshot: RateLimitSnapshot? {
-        guard let windowMinutes, let usedPercent else { return nil }
-        return RateLimitSnapshot(
-            windowMinutes: windowMinutes,
-            usedPercent: usedPercent,
-            resetsAt: resetsAt?.date,
-            name: limitName
-        )
-    }
 }
 
 private struct FlexibleDate: Decodable {
-    let date: Date?
+    enum Storage {
+        case seconds(Double)
+        case string(String)
+        case unavailable
+    }
+
+    let storage: Storage
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
 
         if let seconds = try? container.decode(Double.self) {
-            date = Date(timeIntervalSince1970: seconds)
+            storage = .seconds(seconds)
             return
         }
 
         if let string = try? container.decode(String.self) {
-            let formatter = ISO8601DateFormatter()
-            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-            date = formatter.date(from: string) ?? ISO8601DateFormatter().date(from: string)
+            storage = .string(string)
             return
         }
 
-        date = nil
+        storage = .unavailable
     }
 }

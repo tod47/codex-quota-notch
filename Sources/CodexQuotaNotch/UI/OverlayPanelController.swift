@@ -2,10 +2,39 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
+enum OverlayPanelSizing {
+    static func fixedContentSize(
+        for mode: DisplayMode,
+        hasAlert: Bool,
+        hasFiveHourLimit: Bool = false
+    ) -> NSSize? {
+        guard mode != .floating else { return nil }
+        let height: CGFloat
+        if hasFiveHourLimit {
+            height = hasAlert ? 470 : 410
+        } else {
+            height = hasAlert ? 360 : 304
+        }
+        return NSSize(width: 286, height: height)
+    }
+
+    static func floatingMinimumHeight(hasAlert: Bool, hasFiveHourLimit: Bool) -> CGFloat {
+        guard hasFiveHourLimit else { return 190 }
+        return hasAlert ? 470 : 410
+    }
+}
+
+enum OverlayPanelUpdatePolicy {
+    static func shouldShowFloating(previousMode: DisplayMode?, panelIsVisible: Bool) -> Bool {
+        previousMode != .floating || !panelIsVisible
+    }
+}
+
 @MainActor
 final class OverlayPanelController: NSObject, NSWindowDelegate {
     private let settingsStore: SettingsStore
     private var snapshot: QuotaSnapshot
+    private var isRefreshing = false
     private var panel: NSPanel?
     private var hostingView: NSHostingView<AnyView>?
     private var currentAlert: QuotaAlert?
@@ -15,9 +44,13 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     private var alertDismissWorkItem: DispatchWorkItem?
     private var visibilityAnimationToken = UUID()
     private var isHiding = false
+    private var isApplyingFloatingFrame = false
+    private var pendingFloatingFrame: CodableRect?
+    private var floatingFramePersistenceWorkItem: DispatchWorkItem?
     private var activeMode: DisplayMode?
 
     var onOpenMainWindow: (() -> Void)?
+    var onRefresh: (() -> Void)?
     var onVisibilityChanged: ((Bool) -> Void)?
 
     init(settingsStore: SettingsStore, snapshot: QuotaSnapshot) {
@@ -28,6 +61,11 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
 
     func update(snapshot: QuotaSnapshot) {
         self.snapshot = snapshot
+        refreshContent()
+    }
+
+    func updateRefreshing(_ isRefreshing: Bool) {
+        self.isRefreshing = isRefreshing
         refreshContent()
     }
 
@@ -47,7 +85,12 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
             showPersistent()
         case .floating:
             activeMode = .floating
-            showFloating()
+            if OverlayPanelUpdatePolicy.shouldShowFloating(
+                previousMode: previousMode,
+                panelIsVisible: panel?.isVisible == true
+            ) {
+                showFloating()
+            }
         }
     }
 
@@ -157,6 +200,8 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
         configurePanel(for: .floating)
         panel.alphaValue = 1
         let frame = resolvedFloatingFrame()
+        isApplyingFloatingFrame = true
+        defer { isApplyingFloatingFrame = false }
         panel.setFrame(frame, display: true)
         panel.orderFrontRegardless()
         onVisibilityChanged?(true)
@@ -175,11 +220,11 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     }
 
     func windowDidMove(_ notification: Notification) {
-        persistFloatingFrameIfNeeded()
+        scheduleFloatingFramePersistence()
     }
 
     func windowDidResize(_ notification: Notification) {
-        persistFloatingFrameIfNeeded()
+        scheduleFloatingFramePersistence()
     }
 
     private func makePanelIfNeeded() -> NSPanel {
@@ -234,23 +279,58 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
             panel.styleMask.insert(.resizable)
             panel.level = .floating
             panel.isMovableByWindowBackground = true
-            panel.minSize = NSSize(width: 250, height: 190)
+            panel.minSize = NSSize(
+                width: 250,
+                height: OverlayPanelSizing.floatingMinimumHeight(
+                    hasAlert: currentAlert != nil,
+                    hasFiveHourLimit: snapshot.fiveHourLimit != nil
+                )
+            )
         }
-        panel.setContentSize(NSSize(width: 286, height: currentAlert == nil ? 304 : 360))
+        if let contentSize = OverlayPanelSizing.fixedContentSize(
+            for: mode,
+            hasAlert: currentAlert != nil,
+            hasFiveHourLimit: snapshot.fiveHourLimit != nil
+        ) {
+            panel.setContentSize(contentSize)
+        }
     }
 
     private func refreshContent() {
         hostingView?.rootView = makeRootView()
         if let panel, panel.isVisible {
-            configurePanel(for: settingsStore.settings.displayMode)
+            let mode = settingsStore.settings.displayMode
+            configurePanel(for: mode)
+            if mode == .floating {
+                fitFloatingPanelIfNeeded()
+            }
         }
+    }
+
+    private func fitFloatingPanelIfNeeded() {
+        guard let panel else { return }
+        let minimumHeight = OverlayPanelSizing.floatingMinimumHeight(
+            hasAlert: currentAlert != nil,
+            hasFiveHourLimit: snapshot.fiveHourLimit != nil
+        )
+        guard panel.frame.height < minimumHeight else { return }
+
+        var frame = panel.frame
+        frame.origin.y -= minimumHeight - frame.height
+        frame.size.height = minimumHeight
+        isApplyingFloatingFrame = true
+        panel.setFrame(frame, display: true)
+        isApplyingFloatingFrame = false
     }
 
     private func makeRootView() -> AnyView {
         let view = OverlayView(
             snapshot: snapshot,
             alert: currentAlert,
-            onOpenMainWindow: onOpenMainWindow
+            onOpenMainWindow: onOpenMainWindow,
+            onRefresh: onRefresh,
+            isRefreshing: isRefreshing,
+            showFiveHourQuota: settingsStore.settings.showFiveHourQuota
         )
         return AnyView(view.preferredColorScheme(colorScheme))
     }
@@ -264,14 +344,17 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     }
 
     private func topFrame(on screen: NSScreen) -> NSRect {
-        let width: CGFloat = 286
-        let height: CGFloat = currentAlert == nil ? 304 : 360
+        let size = OverlayPanelSizing.fixedContentSize(
+            for: .topPopup,
+            hasAlert: currentAlert != nil,
+            hasFiveHourLimit: snapshot.fiveHourLimit != nil
+        ) ?? NSSize(width: 286, height: 304)
         let menuBarBottom = screen.visibleFrame.maxY
         return NSRect(
-            x: screen.frame.midX - width / 2,
-            y: menuBarBottom - height,
-            width: width,
-            height: height
+            x: screen.frame.midX - size.width / 2,
+            y: menuBarBottom - size.height,
+            width: size.width,
+            height: size.height
         )
     }
 
@@ -392,7 +475,16 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
 
     private func resolvedFloatingFrame() -> NSRect {
         let stored = settingsStore.settings.floatingFrame
-        let size = NSSize(width: max(250, stored.width), height: max(190, stored.height))
+        let size = NSSize(
+            width: max(250, stored.width),
+            height: max(
+                OverlayPanelSizing.floatingMinimumHeight(
+                    hasAlert: currentAlert != nil,
+                    hasFiveHourLimit: snapshot.fiveHourLimit != nil
+                ),
+                stored.height
+            )
+        )
         if stored.x == 0, stored.y == 0 {
             let visibleFrame = screenForCurrentPointer().visibleFrame
             return NSRect(
@@ -405,9 +497,46 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
         return NSRect(x: stored.x, y: stored.y, width: size.width, height: size.height)
     }
 
-    private func persistFloatingFrameIfNeeded() {
-        guard settingsStore.settings.displayMode == .floating, let frame = panel?.frame else { return }
+    private func scheduleFloatingFramePersistence() {
+        guard !isApplyingFloatingFrame,
+              settingsStore.settings.displayMode == .floating,
+              let frame = panel?.frame else { return }
+
         let next = CodableRect(x: frame.origin.x, y: frame.origin.y, width: frame.width, height: frame.height)
+        guard settingsStore.settings.floatingFrame != next else { return }
+
+        pendingFloatingFrame = next
+        floatingFramePersistenceWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.floatingFramePersistenceWorkItem = nil
+                let pendingFrame = self.pendingFloatingFrame
+                self.pendingFloatingFrame = nil
+                self.persistFloatingFrameIfNeeded(frame: pendingFrame)
+            }
+        }
+        floatingFramePersistenceWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
+    }
+
+    private func persistFloatingFrameIfNeeded(frame: CodableRect? = nil) {
+        guard !isApplyingFloatingFrame else { return }
+
+        let next: CodableRect
+        if let frame {
+            next = frame
+        } else if let currentFrame = panel?.frame {
+            next = CodableRect(
+                x: currentFrame.origin.x,
+                y: currentFrame.origin.y,
+                width: currentFrame.width,
+                height: currentFrame.height
+            )
+        } else {
+            return
+        }
+
         guard settingsStore.settings.floatingFrame != next else { return }
         settingsStore.settings.floatingFrame = next
         settingsStore.save()

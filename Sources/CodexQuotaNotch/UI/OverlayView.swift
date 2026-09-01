@@ -4,15 +4,24 @@ public struct OverlayView: View {
     public let snapshot: QuotaSnapshot
     public let alert: QuotaAlert?
     public let onOpenMainWindow: (() -> Void)?
+    public let onRefresh: (() -> Void)?
+    public let isRefreshing: Bool
+    public let showFiveHourQuota: Bool
 
     public init(
         snapshot: QuotaSnapshot,
         alert: QuotaAlert? = nil,
-        onOpenMainWindow: (() -> Void)? = nil
+        onOpenMainWindow: (() -> Void)? = nil,
+        onRefresh: (() -> Void)? = nil,
+        isRefreshing: Bool = false,
+        showFiveHourQuota: Bool = true
     ) {
         self.snapshot = snapshot
         self.alert = alert
         self.onOpenMainWindow = onOpenMainWindow
+        self.onRefresh = onRefresh
+        self.isRefreshing = isRefreshing
+        self.showFiveHourQuota = showFiveHourQuota
     }
 
     public var body: some View {
@@ -25,7 +34,7 @@ public struct OverlayView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(L10n.text("app.title"))
                         .font(.system(size: 12, weight: .semibold))
-                    Text(L10n.text("app.weekly.quota"))
+                    Text(L10n.text("app.quota"))
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
                 }
@@ -50,6 +59,16 @@ public struct OverlayView: View {
             VStack(alignment: .leading, spacing: 8) {
                 InfoRow(label: L10n.text("resets"), value: L10n.date(snapshot.resetsAt))
                 InfoRow(label: L10n.text("reset.countdown"), value: L10n.countdown(until: snapshot.resetsAt))
+
+                if shouldShowFiveHourQuota, let fiveHourLimit = snapshot.fiveHourLimit {
+                    Divider()
+                        .padding(.vertical, 2)
+                    FiveHourQuotaSection(
+                        limit: fiveHourLimit,
+                        remainingPercent: snapshot.fiveHourRemainingPercent
+                    )
+                }
+
                 InfoRow(label: L10n.text("today.tokens"), value: L10n.number(snapshot.dailyTokens))
             }
 
@@ -60,6 +79,19 @@ public struct OverlayView: View {
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
                 Spacer()
+                if let onRefresh {
+                    Button(action: onRefresh) {
+                        if isRefreshing {
+                            ProgressView()
+                                .controlSize(.small)
+                        } else {
+                            Image(systemName: "arrow.clockwise")
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(isRefreshing)
+                    .help(L10n.text(isRefreshing ? "source.refreshing" : "refresh"))
+                }
                 if let onOpenMainWindow {
                     Button(action: onOpenMainWindow) {
                         Image(systemName: "arrow.up.right.square")
@@ -79,17 +111,33 @@ public struct OverlayView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 24, y: 10)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(L10n.text("app.weekly.quota")), \(L10n.percentage(snapshot.remainingPercent))")
+        .accessibilityLabel(accessibilitySummary)
     }
 
     private var statusColor: Color {
-        guard let remaining = snapshot.remainingPercent else { return .secondary }
-        if remaining <= 10 { return .red }
-        if remaining <= 30 { return .orange }
-        return .mint
+        quotaStatusColor(for: snapshot.remainingPercent)
+    }
+
+    private var accessibilitySummary: String {
+        var values = [
+            "\(L10n.text("quota.weekly")), \(L10n.percentage(snapshot.remainingPercent))"
+        ]
+        if shouldShowFiveHourQuota {
+            values.append(
+                "\(L10n.text("quota.five.hour")), \(L10n.percentage(snapshot.fiveHourRemainingPercent))"
+            )
+        }
+        return values.joined(separator: ", ")
+    }
+
+    var shouldShowFiveHourQuota: Bool {
+        showFiveHourQuota && snapshot.fiveHourLimit != nil
     }
 
     private var statusText: String {
+        if isRefreshing {
+            return L10n.text("source.refreshing")
+        }
         switch snapshot.sourceStatus {
         case .ready:
             return L10n.text("source.ready")
@@ -116,6 +164,47 @@ public struct OverlayView: View {
             return .blue
         }
     }
+}
+
+private struct FiveHourQuotaSection: View {
+    let limit: RateLimitSnapshot
+    let remainingPercent: Int?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(alignment: .lastTextBaseline, spacing: 8) {
+                Text(L10n.text("quota.five.hour"))
+                    .font(.system(size: 11, weight: .semibold))
+                Spacer(minLength: 8)
+                Text(L10n.percentage(remainingPercent))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+            }
+
+            ProgressView(value: Double(remainingPercent ?? 0), total: 100)
+                .tint(quotaStatusColor(for: remainingPercent))
+
+            VStack(alignment: .leading, spacing: 5) {
+                InfoRow(label: L10n.text("resets"), value: L10n.date(limit.resetsAt))
+                InfoRow(
+                    label: L10n.text("reset.countdown"),
+                    value: L10n.countdown(until: limit.resetsAt)
+                )
+            }
+        }
+        .padding(10)
+        .background(
+            .primary.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 12, style: .continuous)
+        )
+    }
+}
+
+private func quotaStatusColor(for remaining: Int?) -> Color {
+    guard let remaining else { return .secondary }
+    if remaining <= 10 { return .red }
+    if remaining <= 30 { return .orange }
+    return .mint
 }
 
 private struct AlertBanner: View {

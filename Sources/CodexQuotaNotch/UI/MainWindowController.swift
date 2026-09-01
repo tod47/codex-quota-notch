@@ -6,17 +6,20 @@ final class MainWindowController: NSObject, NSWindowDelegate {
     private let settingsStore: SettingsStore
     private let onRescan: () -> Void
     private let onChooseDataDirectory: () -> Void
+    private let onTestOpenClaw: () -> Void
     private var window: NSWindow?
     private var hostingView: NSHostingView<MainWindowView>?
 
     init(
         settingsStore: SettingsStore,
         onRescan: @escaping () -> Void,
-        onChooseDataDirectory: @escaping () -> Void
+        onChooseDataDirectory: @escaping () -> Void,
+        onTestOpenClaw: @escaping () -> Void = {}
     ) {
         self.settingsStore = settingsStore
         self.onRescan = onRescan
         self.onChooseDataDirectory = onChooseDataDirectory
+        self.onTestOpenClaw = onTestOpenClaw
         super.init()
     }
 
@@ -29,6 +32,10 @@ final class MainWindowController: NSObject, NSWindowDelegate {
 
     func update(snapshot: QuotaSnapshot) {
         hostingView?.rootView = makeRootView(snapshot: snapshot)
+    }
+
+    func updateLanguage() {
+        window?.title = L10n.text("app.title")
     }
 
     private func makeWindowIfNeeded(snapshot: QuotaSnapshot) -> NSWindow {
@@ -57,7 +64,8 @@ final class MainWindowController: NSObject, NSWindowDelegate {
             snapshot: snapshot,
             settingsStore: settingsStore,
             onRescan: onRescan,
-            onChooseDataDirectory: onChooseDataDirectory
+            onChooseDataDirectory: onChooseDataDirectory,
+            onTestOpenClaw: onTestOpenClaw
         )
     }
 }
