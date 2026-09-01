@@ -49,6 +49,7 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
     private var activeMode: DisplayMode?
 
     var onOpenMainWindow: (() -> Void)?
+    var onRefresh: (() -> Void)?
     var onVisibilityChanged: ((Bool) -> Void)?
 
     init(settingsStore: SettingsStore, snapshot: QuotaSnapshot) {
@@ -321,6 +322,7 @@ final class OverlayPanelController: NSObject, NSWindowDelegate {
             snapshot: snapshot,
             alert: currentAlert,
             onOpenMainWindow: onOpenMainWindow,
+            onRefresh: onRefresh,
             showFiveHourQuota: settingsStore.settings.showFiveHourQuota
         )
         return AnyView(view.preferredColorScheme(colorScheme))

@@ -52,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayPanelController.onOpenMainWindow = { [weak self] in
             self?.openMainWindow()
         }
+        overlayPanelController.onRefresh = { [weak self] in
+            self?.model?.rescan()
+        }
         overlayPanelController.onVisibilityChanged = { [weak self] isVisible in
             self?.model?.setFastRefresh(isVisible)
         }

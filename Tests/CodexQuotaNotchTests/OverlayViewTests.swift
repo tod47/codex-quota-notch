@@ -41,4 +41,29 @@ final class OverlayViewTests: XCTestCase {
             ).shouldShowFiveHourQuota
         )
     }
+
+    func testStaleDataExposesARefreshAction() {
+        let resetDate = Date(timeIntervalSince1970: 1_735_689_600)
+        let snapshot = QuotaSnapshot(
+            weeklyLimit: RateLimitSnapshot(
+                windowMinutes: 10_080,
+                usedPercent: 20,
+                resetsAt: resetDate
+            ),
+            secondaryLimit: nil,
+            dailyTokens: 0,
+            lastUpdatedAt: resetDate,
+            sourceStatus: .stale(lastUpdated: resetDate)
+        )
+        var refreshCount = 0
+
+        let view = OverlayView(
+            snapshot: snapshot,
+            onRefresh: { refreshCount += 1 }
+        )
+
+        view.onRefresh?()
+
+        XCTAssertEqual(refreshCount, 1)
+    }
 }

@@ -4,17 +4,20 @@ public struct OverlayView: View {
     public let snapshot: QuotaSnapshot
     public let alert: QuotaAlert?
     public let onOpenMainWindow: (() -> Void)?
+    public let onRefresh: (() -> Void)?
     public let showFiveHourQuota: Bool
 
     public init(
         snapshot: QuotaSnapshot,
         alert: QuotaAlert? = nil,
         onOpenMainWindow: (() -> Void)? = nil,
+        onRefresh: (() -> Void)? = nil,
         showFiveHourQuota: Bool = true
     ) {
         self.snapshot = snapshot
         self.alert = alert
         self.onOpenMainWindow = onOpenMainWindow
+        self.onRefresh = onRefresh
         self.showFiveHourQuota = showFiveHourQuota
     }
 
@@ -73,6 +76,13 @@ public struct OverlayView: View {
                     .font(.system(size: 9))
                     .foregroundStyle(.secondary)
                 Spacer()
+                if let onRefresh {
+                    Button(action: onRefresh) {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                    .help(L10n.text("refresh"))
+                }
                 if let onOpenMainWindow {
                     Button(action: onOpenMainWindow) {
                         Image(systemName: "arrow.up.right.square")
